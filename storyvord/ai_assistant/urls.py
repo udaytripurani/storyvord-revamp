@@ -8,5 +8,5 @@ urlpatterns = [
     path('', chat_page, name='chat_page'),             # URL for rendering chat UI
     path('ai_chat/', wss_page, name='wss_page'),
     path('chat/', ChatAPIView.as_view(), name='chat_api'),  # URL for handling chat logic via API
-    path('requirement/', CrewSearch.as_view(), name='requirement'),
+    path('v2/requirement/', CrewSearch.as_view(), name='requirement'),
 ]

@@ -17,7 +17,7 @@ class CrewSearch(APIView):
             project_requirement = ProjectRequirements.objects.get(id=req_id)
             crew_titles = project_requirement.crew_requirements.values_list('crew_title', flat=True)
         except ProjectRequirements.DoesNotExist:
-            return Response({"message": "ProjectRequirements not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"message": "No project requirement found."}, status=status.HTTP_404_NOT_FOUND)
         
         crew_filter = Q()
         for title in crew_titles:
