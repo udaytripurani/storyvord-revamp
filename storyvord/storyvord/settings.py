@@ -67,7 +67,7 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.google'
 ]
 
 SITE_ID = 1
@@ -211,14 +211,24 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
-EMAIL_HOST = 'smtp.sendgrid.net'
+# EMAIL_HOST = 'smtp.sendgrid.net'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'apikey'
+# EMAIL_HOST_PASSWORD = SENDGRID_API_KEY
+# DEFAULT_NO_REPLY_EMAIL = 'getvishalprajapati@gmail.com'
+# DEFAULT_FROM_EMAIL = 'getvishalprajapati@gmail.com'  # Update this line
+ACCOUNT_ACTIVATION_DAYS = 7
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.postmarkapp.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'apikey'
-EMAIL_HOST_PASSWORD = SENDGRID_API_KEY
-# DEFAULT_NO_REPLY_EMAIL = 'getvishalprajapati@gmail.com'
-DEFAULT_FROM_EMAIL = 'getvishalprajapati@gmail.com'  # Update this line
-ACCOUNT_ACTIVATION_DAYS = 7
+EMAIL_HOST_USER = os.getenv('POSTMARK_API_KEY')  # This is always 'postmark'
+EMAIL_HOST_PASSWORD = os.getenv('POSTMARK_API_KEY')  # Your Postmark Server API Token
+EMAIL_USE_TLS = True  # Use TLS
+DEFAULT_FROM_EMAIL = 'no-reply@storyvord.com'  # The verified sender email address on Postmark
+DEFAULT_NO_REPLY_EMAIL = 'no-reply@storyvord.com'
 
 # Consider adding settings for static and media files for production
 STATIC_URL = '/static/'

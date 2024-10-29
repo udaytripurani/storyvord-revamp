@@ -23,7 +23,14 @@ def send_verification_email(user, token, absurl=None):
         'user': user.email,
         'absurl': absurl,
     })
-    email = EmailMessage(subject="Activate your account", body=email_body, from_email=settings.DEFAULT_FROM_EMAIL, to=[user.email])
+    
+    from_email = f"Storyvord Platform <{getattr(settings,'DEFAULT_FROM_EMAIL','DEFAULT_NO_REPLY_EMAIL')}>"
+    
+    email = EmailMessage(
+        subject="Activate your account", 
+        body=email_body, 
+        from_email=from_email,
+        to=[user.email])
     email.content_subtype = "html"
     EmailThread(email).start()
     
@@ -55,11 +62,13 @@ def send_welcome_email(user):
     email_body = render_to_string('email/welcome.html', {
         'user': user,
     })
+    
+    from_email = f"Storyvord Platform <{getattr(settings,'DEFAULT_FROM_EMAIL','DEFAULT_NO_REPLY_EMAIL')}>"
 
     email = EmailMessage(
         subject='Welcome to our platform!',
         body=email_body,
-        from_email=getattr(settings, 'DEFAULT_NO_REPLY_EMAIL', 'getvishalprajapati@gmail.com'),  # Use settings value or fallback
+        from_email=from_email,
         to=[user.email],
     )
     email.content_subtype = 'html'

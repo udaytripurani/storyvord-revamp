@@ -101,20 +101,20 @@ class OnboardRequest(models.Model):
     
 #V2 Models
 
-class CrewRequirements(models.Model):
-    title = models.CharField(max_length=256, null=True, blank=True)
-    quantity = models.PositiveIntegerField(null=True, blank=True)
+# class CrewRequirements(models.Model):
+#     title = models.CharField(max_length=256, null=True, blank=True)
+#     quantity = models.PositiveIntegerField(null=True, blank=True)
     
-    def __str__(self):
-        return self.title
+#     def __str__(self):
+#         return self.title
 
-class EquipmentRequirements(models.Model):
-    title = models.CharField(max_length=256, null=True, blank=True)
-    quantity = models.PositiveIntegerField(null=True, blank=True)
+# class EquipmentRequirements(models.Model):
+#     title = models.CharField(max_length=256, null=True, blank=True)
+#     quantity = models.PositiveIntegerField(null=True, blank=True)
     
-    def __str__(self):
-        return self.title
-    
+#     def __str__(self):
+#         return self.title
+
 class Permission(models.Model):
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(null=True, blank=True)
@@ -153,13 +153,23 @@ class ProjectDetails(models.Model):
     
     class Meta:
         ordering = ['project_id']
+        
+class ProjectCrewRequirement(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    crew_title = models.CharField(max_length=256, null=True, blank=True)
+    quantity = models.PositiveIntegerField()
+
+class ProjectEquipmentRequirement(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    equipment_title = models.CharField(max_length=256, null=True, blank=True)
+    quantity = models.PositiveIntegerField()
     
 class ProjectRequirements(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     budget_currency = models.CharField(max_length=256, default='$')
     budget = models.DecimalField(max_digits=14, decimal_places=2, null=True)
-    crew_requirements = models.ManyToManyField(CrewRequirements, related_name='projects_with_crew')
-    equipment_requirements = models.ManyToManyField(EquipmentRequirements, related_name='projects_with_equipment')
+    crew_requirements = models.ManyToManyField(ProjectCrewRequirement, related_name='projects_with_crew')
+    equipment_requirements = models.ManyToManyField(ProjectEquipmentRequirement, related_name='projects_with_equipment')
     status = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -167,6 +177,7 @@ class ProjectRequirements(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
+        
         return f"{self.project.name} - Requirements"
     
 class ShootingDetails(models.Model):
@@ -184,13 +195,3 @@ class ShootingDetails(models.Model):
     
     def __str__(self):
         return f"{self.project.name} - Shooting at {self.location}"
-    
-class ProjectCrewRequirement(models.Model):
-    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
-    crew = models.ForeignKey(CrewRequirements, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
-
-class ProjectEquipmentRequirement(models.Model):
-    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
-    equipment = models.ForeignKey(EquipmentRequirements, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
