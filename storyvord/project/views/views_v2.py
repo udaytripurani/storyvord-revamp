@@ -8,7 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, 
-    Role, Membership, User, Permission
+    Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,
 )
 from ..serializers.serializers_v2 import (
     ProjectDetailsSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
@@ -102,6 +102,94 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectRequirementsSerializer
     permission_classes = [IsAuthenticated]
 
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        user = request.user
+        project = get_object_or_404(ProjectDetails, project_id=data.get("project"))
+
+        # Permission check
+        if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
+            raise PermissionDenied("You do not have permission to create requirements for this project.")
+
+        # Prepare data for ProjectRequirements
+        project_requirements_data = {
+            "project": project,
+            "budget_currency": data.get("budget_currency", "$"),
+            "budget": data.get("budget"),
+            "created_by": user,
+            "updated_by": user,
+        }
+
+        # Create ProjectRequirements instance
+        try:
+            project_requirements = ProjectRequirements.objects.create(**project_requirements_data)
+
+            # Process crew requirements
+            for crew_item in data.get("crew_requirements", []):
+                crew_obj, _ = ProjectCrewRequirement.objects.update_or_create(
+                    project=project,
+                    crew_title=crew_item.get("title"),
+                    defaults={"quantity": crew_item.get("quantity", 1)}
+                )
+                project_requirements.crew_requirements.add(crew_obj)
+
+            # Process equipment requirements
+            for equipment_item in data.get("equipment_requirements", []):
+                equipment_obj, _ = ProjectEquipmentRequirement.objects.update_or_create(
+                    project=project,
+                    equipment_title=equipment_item.get("title"),
+                    defaults={"quantity": equipment_item.get("quantity", 1)}
+                )
+                project_requirements.equipment_requirements.add(equipment_obj)
+
+            # Serialize and return the response
+            serializer = self.get_serializer(project_requirements)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        validated_data = request.data
+        user = request.user
+
+        # Check permissions
+        project = get_object_or_404(ProjectDetails, project_id=validated_data.get("project"))
+        if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
+            raise PermissionDenied("You do not have permission to update requirements for this project.")
+
+        # Update main ProjectRequirements fields
+        instance.budget_currency = validated_data.get("budget_currency", instance.budget_currency)
+        instance.budget = validated_data.get("budget", instance.budget)
+        instance.updated_by = user
+        instance.save()
+
+        # Update or create crew requirements
+        crew_data = validated_data.get("crew_requirements", [])
+        instance.crew_requirements.clear()  # Clear existing crew requirements
+        for crew_item in crew_data:
+            crew_obj, _ = ProjectCrewRequirement.objects.update_or_create(
+                project=project,
+                crew_title=crew_item.get("title"),
+                defaults={"quantity": crew_item.get("quantity", 1)}
+            )
+            instance.crew_requirements.add(crew_obj)
+
+        # Update or create equipment requirements
+        equipment_data = validated_data.get("equipment_requirements", [])
+        instance.equipment_requirements.clear()  # Clear existing equipment requirements
+        for equipment_item in equipment_data:
+            equipment_obj, _ = ProjectEquipmentRequirement.objects.update_or_create(
+                project=project,
+                equipment_title=equipment_item.get("title"),
+                defaults={"quantity": equipment_item.get("quantity", 1)}
+            )
+            instance.equipment_requirements.add(equipment_obj)
+
+        # Serialize and return the updated instance
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 # Shooting Details Viewset
 class ShootingDetailsViewSet(viewsets.ModelViewSet):

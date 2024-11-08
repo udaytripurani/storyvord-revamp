@@ -18,11 +18,11 @@ def get_site_url(default=None):
     value = os.getenv('SITE')
     if value is not None:
         if value.lower() == 'dev':
-            return 'https://dev.storyvord.com'
+            return 'https://api-dev.storyvord.com/api/'
         elif value.lower() == 'stage':
-            return 'https://stage.storyvord.com'
+            return 'https://stage-api.storyvord.com/api/'
         elif value.lower() == 'production':
-            return 'https://storyvord.com'
+            return 'https://api.storyvord.com/api/'
         else:
-            return 'http://localhost:8000'
+            return 'http://localhost:8000/api/'
     return default

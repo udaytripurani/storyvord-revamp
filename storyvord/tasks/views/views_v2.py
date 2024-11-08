@@ -53,7 +53,7 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
         except Exception as exc:
             logger.error(f"Error creating task: {exc}")
             response = custom_exception_handler(exc, self.get_renderer_context())
-            return response    
+            return response
     # Update Task
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)

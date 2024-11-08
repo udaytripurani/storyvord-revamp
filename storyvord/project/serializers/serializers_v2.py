@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, 
-    Role, Permission, Membership, CrewRequirements, EquipmentRequirements,
+    Role, Permission, Membership,
     ProjectCrewRequirement, ProjectEquipmentRequirement
 )
 from accounts.models import Permission as AccountPermission
@@ -30,21 +30,6 @@ class MembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Membership
         fields = ['user', 'role', 'project', 'created_at']
-
-
-# Crew Requirements Serializer
-class CrewRequirementsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CrewRequirements
-        fields = '__all__'
-
-
-# Equipment Requirements Serializer
-class EquipmentRequirementsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EquipmentRequirements
-        fields = '__all__'
-
 
 # Project Serializer
 class ProjectDetailsSerializer(serializers.ModelSerializer):
@@ -75,29 +60,29 @@ class ProjectDetailsSerializer(serializers.ModelSerializer):
         
         return project
 
+
+# Project Crew Requirement Serializer
+class ProjectCrewRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectCrewRequirement
+        fields = '__all__'
+
+# Project Equipment Requirement Serializer
+class ProjectEquipmentRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectEquipmentRequirement
+        fields = '__all__'
+
 # Project Requirements Serializer
 class ProjectRequirementsSerializer(serializers.ModelSerializer):
-    crew_requirements = CrewRequirementsSerializer(many=True, read_only=True)
-    equipment_requirements = EquipmentRequirementsSerializer(many=True, read_only=True)
+    crew_requirements = ProjectCrewRequirementSerializer(many=True, read_only=True)
+    equipment_requirements = ProjectEquipmentRequirementSerializer(many=True, read_only=True)
 
     class Meta:
         model = ProjectRequirements
         fields = ['project', 'budget_currency', 'budget', 'crew_requirements', 'equipment_requirements', 'created_at', 'updated_at']
         
     def create(self, validated_data):
-        if validated_data['project'].owner == self.context['request'].user:
-            validated_data['created_by'] = self.context['request'].user
-            validated_data['updated_by'] = self.context['request'].user
-            return ProjectRequirements.objects.create(**validated_data)
-        
-        if Membership.objects.filter(project=validated_data['project'], user=self.context['request'].user).exists() == False:
-            raise PermissionDenied("Membership doesnt have required permission.")
-        
-        if self.context['request'].user is None or validated_data['project'].owner != self.context['request'].user:
-            raise PermissionDenied("You don't have permission to create a project requirement.")
-        
-        validated_data['created_by'] = self.context['request'].user
-        validated_data['updated_by'] = self.context['request'].user
         return ProjectRequirements.objects.create(**validated_data)
 
 
@@ -106,21 +91,3 @@ class ShootingDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShootingDetails
         fields = '__all__'
-
-
-# Project Crew Requirement Serializer
-class ProjectCrewRequirementSerializer(serializers.ModelSerializer):
-    crew = CrewRequirementsSerializer()
-
-    class Meta:
-        model = ProjectCrewRequirement
-        fields = ['project', 'crew', 'quantity']
-
-
-# Project Equipment Requirement Serializer
-class ProjectEquipmentRequirementSerializer(serializers.ModelSerializer):
-    equipment = EquipmentRequirementsSerializer()
-
-    class Meta:
-        model = ProjectEquipmentRequirement
-        fields = ['project', 'equipment', 'quantity']
