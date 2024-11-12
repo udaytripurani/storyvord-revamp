@@ -6,63 +6,105 @@ from rest_framework.permissions import IsAuthenticated
 from .models import EquipmentCategory, EquipmentModel, EquipmentInstance, EquipmentLog
 from .serializers import EquipmentCategorySerializer, EquipmentModelSerializer, EquipmentInstanceSerializer, EquipmentLogSerializer
 from django.shortcuts import get_object_or_404
+from storyvord.exception_handlers import custom_exception_handler
 
 class EquipmentCategoryListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        categories = EquipmentCategory.objects.all()
-        serializer = EquipmentCategorySerializer(categories, many=True)
-        return Response(serializer.data)
+        try:
+            categories = EquipmentCategory.objects.all()
+            serializer = EquipmentCategorySerializer(categories, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-         # Check if the data is a list
-        if isinstance(request.data, list):
-            serializer = EquipmentCategorySerializer(data=request.data, many=True)  # <-- Add this line
-        else:
-         serializer = EquipmentCategorySerializer(data=request.data)
-        if serializer.is_valid():
+        try:
+             # Check if the data is a list
+            if isinstance(request.data, list):
+                serializer = EquipmentCategorySerializer(data=request.data, many=True)  # <-- Add this line
+            else:
+                serializer = EquipmentCategorySerializer(data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EquipmentModelListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        models = EquipmentModel.objects.all()
-        serializer = EquipmentModelSerializer(models, many=True)
-        return Response(serializer.data)
+        try:
+            models = EquipmentModel.objects.all()
+            serializer = EquipmentModelSerializer(models, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-          # Check if the data is a list
-        if isinstance(request.data, list):
-            serializer = EquipmentModelSerializer(data=request.data, many=True)  # <-- Add this line
-        else:
-         serializer = EquipmentModelSerializer(data=request.data)
-        if serializer.is_valid():
+        try:
+              # Check if the data is a list
+            if isinstance(request.data, list):
+                serializer = EquipmentModelSerializer(data=request.data, many=True)  # <-- Add this line
+            else:
+                serializer = EquipmentModelSerializer(data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EquipmentInstanceListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        instances = EquipmentInstance.objects.all()
-        serializer = EquipmentInstanceSerializer(instances, many=True)
-        return Response(serializer.data)
+        try:
+            instances = EquipmentInstance.objects.all()
+            serializer = EquipmentInstanceSerializer(instances, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-         # Check if the data is a list
-        if isinstance(request.data, list):
-            serializer = EquipmentInstanceSerializer(data=request.data, many=True)  # <-- Add this line
-        else:
-         serializer = EquipmentInstanceSerializer(data=request.data)
-        if serializer.is_valid():
+        try:
+             # Check if the data is a list
+            if isinstance(request.data, list):
+                serializer = EquipmentInstanceSerializer(data=request.data, many=True)  # <-- Add this line
+            else:
+                serializer = EquipmentInstanceSerializer(data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EquipmentInstanceDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -71,49 +113,83 @@ class EquipmentInstanceDetailAPIView(APIView):
         return get_object_or_404(EquipmentInstance, pk=pk)
 
     def get(self, request, pk):
-        instance = self.get_object(pk)
-        serializer = EquipmentInstanceSerializer(instance)
-        return Response(serializer.data)
+        try:
+            instance = self.get_object(pk)
+            serializer = EquipmentInstanceSerializer(instance)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, pk):
-        instance = self.get_object(pk)
-        serializer = EquipmentInstanceSerializer(instance, data=request.data)
-        if serializer.is_valid():
+        try:
+            instance = self.get_object(pk)
+            serializer = EquipmentInstanceSerializer(instance, data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def patch(self, request, pk):
-        instance = self.get_object(pk)
-        serializer = EquipmentInstanceSerializer(instance, data=request.data, partial=True)
-        if serializer.is_valid():
+        try:
+            instance = self.get_object(pk)
+            serializer = EquipmentInstanceSerializer(instance, data=request.data, partial=True)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, pk):
-        instance = self.get_object(pk)
-        instance.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            instance = self.get_object(pk)
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EquipmentLogListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        logs = EquipmentLog.objects.all()
-        serializer = EquipmentLogSerializer(logs, many=True)
-        return Response(serializer.data)
+        try:
+            logs = EquipmentLog.objects.all()
+            serializer = EquipmentLogSerializer(logs, many=True)
+            return Response(serializer.data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-         # Check if the data is a list
-        if isinstance(request.data, list):
-            serializer = EquipmentLogSerializer(data=request.data, many=True)  # <-- Add this line
-        else:
-         serializer = EquipmentLogSerializer(data=request.data)
-        if serializer.is_valid():
+        try:
+             # Check if the data is a list
+            if isinstance(request.data, list):
+                serializer = EquipmentLogSerializer(data=request.data, many=True)  # <-- Add this line
+            else:
+                serializer = EquipmentLogSerializer(data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EquipmentLogDetailAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -122,27 +198,58 @@ class EquipmentLogDetailAPIView(APIView):
         return get_object_or_404(EquipmentLog, pk=pk)
 
     def get(self, request, pk):
-        log = self.get_object(pk)
-        serializer = EquipmentLogSerializer(log)
-        return Response(serializer.data)
+        try:
+            log = self.get_object(pk)
+            serializer = EquipmentLogSerializer(log)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, pk):
-        log = self.get_object(pk)
-        serializer = EquipmentLogSerializer(log, data=request.data)
-        if serializer.is_valid():
+        try:
+            log = self.get_object(pk)
+            serializer = EquipmentLogSerializer(log, data=request.data)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def patch(self, request, pk):
-        log = self.get_object(pk)
-        serializer = EquipmentLogSerializer(log, data=request.data, partial=True)
-        if serializer.is_valid():
+        try:
+            log = self.get_object(pk)
+            serializer = EquipmentLogSerializer(log, data=request.data, partial=True)
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, pk):
-        log = self.get_object(pk)
-        log.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            log = self.get_object(pk)
+            log.delete()
+            data = {
+                'message': 'Success',
+                'data': None
+            }
+            return Response(data ,status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response

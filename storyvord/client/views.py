@@ -77,20 +77,21 @@ class OnboardAPIView(APIView):
             user = request.user
 
             if user.user_type != 'client':
-                return Response({'error': 'User is not a client'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'status': False,
+                                 'error': 'User is not a client'}, status=status.HTTP_400_BAD_REQUEST)
         
             if user.steps:
-                return Response({'error': 'User has already completed the onboarding process'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'status': False,
+                                 'error': 'User has already completed the onboarding process'}, status=status.HTTP_400_BAD_REQUEST)
             profile = self.get_object()
             serializer = ProfileSerializer(profile, data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                data = {
-                    'message': 'Success',
-                    'data': serializer.data
-                }
-                return Response(data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(exception=True)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
@@ -134,14 +135,13 @@ class ProfileDetailAPIView(APIView):
             # Update profile based on logged-in user
             profile = self.get_object()
             serializer = ProfileSerializer(profile, data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                data = {
-                    'message': 'Success',
-                    'data': serializer.data
-                }
-                return Response(data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(exception=True)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
@@ -207,14 +207,13 @@ class ClientCompanyProfileAPIView(APIView):
             profile = ClientCompanyProfile.objects.get(user=request.user)
 
             serializer = ClientCompanyProfileSerializer(profile, data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                data = {
-                    'message': 'Success',
-                    'data': serializer.data
-                }
-                return Response(data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(exception=True)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
@@ -259,7 +258,7 @@ class SwitchProfileView(APIView):
                 user.is_crew = True
                 user.save()
 
-            return Response({'status': True,
+            return Response({'message': 'Success',
                              'detail': 'Profile updated successfully.'}, status=status.HTTP_200_OK)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
@@ -288,14 +287,13 @@ class ClientCompanyFolderView(APIView):
     def post(self, request, format=None):
         try:
             serializer = ClientCompanyFolderSerializer(data=request.data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save(created_by=request.user)
-                data = {
-                    'message': 'Success',
-                    'data': serializer.data
-                }
-                return Response(data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(exception=True)
+            serializer.save(created_by=request.user)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
@@ -326,14 +324,13 @@ class ClientCompanyFileView(APIView):
             req_data = request.data.copy()
             req_data['folder'] = folder.id
             serializer = ClientCompanyFileSerializer(data=req_data)
-            if serializer.is_valid():
-                serializer.save()
-                data = {
-                    'message': 'Success',
-                    'data': serializer.data
-                }
-                return Response(data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(exception=True)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
@@ -360,43 +357,63 @@ class ClientCompanyFileUpdateView(APIView):
                 'message': 'Success',
                 'data': serializer.data
             }
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(data, status=status.HTTP_200_OK)
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
     def put(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
+            if file is None:
+                return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def patch(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
+            if file is None:
+                return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
+            if file is None:
+                return Response({'status': False,
+                                'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        if file.folder.created_by != request.user:
-            return Response({'detail': 'You do not have permission to delete this file.'}, status=status.HTTP_403_FORBIDDEN)
+            if file.folder.created_by != request.user:
+                return Response({'status': False,
+                                'detail': 'You do not have permission to delete this file.'}, status=status.HTTP_403_FORBIDDEN)
 
-        file.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            file.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     
 class ClientCompanyFolderUpdateView(APIView):
@@ -409,36 +426,64 @@ class ClientCompanyFolderUpdateView(APIView):
             return None
 
     def get(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            folder = self.get_object(pk)
+            if folder is None:
+                return Response({'status': False,
+                                'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder)
-        return Response(serializer.data)
+            serializer = ClientCompanyFolderUpdateSerializer(folder)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            folder = self.get_object(pk)
+            if folder is None:
+                return Response({'status': False,
+                                 'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, context={'request': request})
+            serializer.is_valid(exception=True)
             self.check_object_permissions(request, folder)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def patch(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            folder = self.get_object(pk)
+            if folder is None:
+                return Response({'status': False,
+                                 'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(exception=True)
             self.check_object_permissions(request, folder)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def check_object_permissions(self, request, obj):
         # Custom permission check
@@ -451,60 +496,87 @@ class ClientCompanyFolderUpdateView(APIView):
 class ClientCompanyEventAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ClientCompanyEventSerializer
+
     def get(self, request, event_id=None):
-        if event_id:
-            try:
+        try:
+            if event_id:
                 event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
                 serializer = ClientCompanyEventSerializer(event)
-                return Response(serializer.data)
-            except ClientCompanyEvent.DoesNotExist:
-                return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                data = {
+                    'message': 'Success',
+                    'data': serializer.data
+                }
+                return Response(data)
         
-        try:
             company_profile = ClientCompanyProfile.objects.get(user=request.user)
             print("Company prodile", company_profile)
             events = ClientCompanyEvent.objects.filter(calendar__company=company_profile)
             serializer = ClientCompanyEventSerializer(events, many=True)
-            return Response(serializer.data)
-        except ClientCompanyProfile.DoesNotExist:
-            return Response({"error": "Company profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-        serializer = ClientCompanyEventSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
+        try:
+            serializer = ClientCompanyEventSerializer(data=request.data, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, event_id):
         try:
             event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
-        except ClientCompanyEvent.DoesNotExist:
-            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyEventSerializer(event, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyEventSerializer(event, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, event_id):
         try:
             event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
             event.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except ClientCompanyEvent.DoesNotExist:
-            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
             
 
 class CompanyListView(APIView):
+
     def get(self, request, format=None):
-        # Get the ClientProfile associated with the current user
-        client_profile = ClientProfile.objects.filter(employee_profile=request.user)
+        try:
+            # Get the ClientProfile associated with the current user
+            client_profile = ClientProfile.objects.filter(employee_profile=request.user)
 
-        # Get all the companies where the user is listed in the employee profile
-        companies = ClientCompanyProfile.objects.filter(user__in=client_profile.values_list('user', flat=True))
+            # Get all the companies where the user is listed in the employee profile
+            companies = ClientCompanyProfile.objects.filter(user__in=client_profile.values_list('user', flat=True))
 
-        serializer = ClientCompanyProfileSerializer(companies, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            serializer = ClientCompanyProfileSerializer(companies, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
