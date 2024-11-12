@@ -79,7 +79,6 @@ class PersonalInfo(models.Model):
     def __str__(self):
         return self.name
     
-    
 class Country(models.Model):
     name = models.CharField(max_length=100, unique=True)
     alpha_2_code = models.CharField(max_length=2, unique=True)

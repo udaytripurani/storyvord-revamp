@@ -7,6 +7,10 @@ from project.models import ProjectRequirements , ProjectEquipmentRequirement
 from crew.models import CrewProfile
 from django.db.models import Q
 from accounts.models import PersonalInfo
+from pydantic import BaseModel
+from typing import List, Dict
+from openai import OpenAI
+client = OpenAI()
 
 class CrewSearch(APIView):
     serializer_class = ProjectRequirementsSerializer
@@ -33,11 +37,6 @@ class CrewSearch(APIView):
             return Response({"message": "Error occurred while filtering crew.", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         try:
-            suggested_equipment = project_requirement.equipment_requirements.all()
-        except ProjectEquipmentRequirement.DoesNotExist:
-            return Response({"message": "Equipment not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        try:
             crew_data = []
             for crew in suggested_crew:
                 crew_data.append({
@@ -54,18 +53,47 @@ class CrewSearch(APIView):
                     "standardRate": crew.crew_profile.standardRate,
                     "technicalProficiencies": crew.crew_profile.technicalProficiencies
                 })
-            equipment_data = []
-            for equipment in suggested_equipment:
-                equipment_data.append({
-                    "name": equipment.equipment_title,
-                    "quantity": equipment.quantity
-                })
+                
+            class CrewData(BaseModel):
+                id: str
+                name: str
+                job_title: str
+                bio: str
+                location: str
+                languages: List[str]
+                contact_number: str
+                experience: str
+                skills: List[str]
+                specializations: List[str]
+                standardRate: str
+                technicalProficiencies: List[str]
+
+            class CrewSuggestionsResponse(BaseModel):
+                crew_suggestion: List[CrewData]
+                
+            completion = client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=[
+                    {"role": "system", "content": "You are an AI expert providing crew suggestions based on project requirements."},
+                    {"role": "user", "content": f"Provide a list of 3-4 crew members based on the project requirements. "
+                                                f"Project requirement is this: {project_requirement}. "
+                                                f"Give the suggestion in JSON format from this data: {crew_data}"}
+                ],
+                 response_format=CrewSuggestionsResponse,
+            )
+            
+            ai_response = completion.choices[0].message.parsed
+
+            data = {
+                'AI Suggestion': ai_response,
+                'crew_data': crew_data
+            }
             
         except Exception as e:
             return Response({"message": "Error occurred while serializing results.","error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
         return Response({
-            "crew_suggestions": crew_data,
-            "equipment_suggestions": equipment_data
+            "status": status.HTTP_200_OK,
+            "message": "Crew suggestions retrieved successfully.",
+            "data": data,
         }, status=status.HTTP_200_OK)

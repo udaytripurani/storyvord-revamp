@@ -33,7 +33,6 @@ class EventSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"User {user.email} is not part of the crew or an employee of the client."
                 )
-
         return value
 
 class CalendarSerializer(serializers.ModelSerializer):

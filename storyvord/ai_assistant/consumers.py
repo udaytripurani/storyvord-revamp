@@ -29,19 +29,19 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         # Validate and authenticate user
         try:
             access_token = AccessToken(token)
-            user = await self.get_user(access_token['user_id'])  # Use the async wrapper
-            self.scope['user'] = user  # Set the authenticated user in the scope
+            user = await self.get_user(access_token['user_id'])
+            self.scope['user'] = user
         except Exception as e:
             logger.error(f"Authentication failed: {e}")
-            self.scope['user'] = AnonymousUser()  # Set as AnonymousUser if authentication fails            
+            self.scope['user'] = AnonymousUser()
         
         # Check if the user is authenticated
         if not self.scope['user'].is_authenticated:
             await self.close()
         else:
-            self.session_id = str(uuid.uuid4())  # Create a unique session ID
+            self.session_id = str(uuid.uuid4())
             await self.create_chat_session(self.scope['user'], self.session_id)
-            await self.accept()  # Accept the connection if authenticated
+            await self.accept()
      
     async def disconnect(self, close_code):
         logger.info(f"WebSocket disconnected with code: {close_code}")    
@@ -50,7 +50,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         if self.scope['user'].is_anonymous:
             await self.send(json.dumps({'error': 'Authentication required'}))
             return
-        
+
         data = json.loads(text_data)
         user_message = data.get('message', '')
 
@@ -62,7 +62,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
 
         # Generate the embedding for the user message
         user_message_embedding,embedding_cost = await self.generate_embedding(user_message)
-        
+
          # Retrieve relevant messages based on embeddings
         relevant_context = await self.get_relevant_messages(self.session_id, user_message_embedding)
 
@@ -83,17 +83,20 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             'ai_response': ai_response,
             'cost': total_cost
         }))
-        
+
     async def get_ai_response(self,user_message,context):
         # Include the context in the prompt
-        messages = [{"role": "system", "content": "I need you to act as a line producer with expertise in local locations, compliance issues, and cultural nuances. You have a strong understanding of the risks involved in film production, especially related to location-specific factors. You are also skilled in budgeting for films, including compliance costs, and creating detailed itineraries to ensure compliance. Your knowledge covers locations worldwide, from big cities to small towns in every country. Given this expertise, provide advice using critical thinking based on further details I will provide, such as crew size, equipment (like cameras), and the type of shoot (indoor, outdoor, corporate, or blog). Offer two options when appropriate. Your response should include a comprehensive overview, and feel free to ask questions to better understand my production needs."}] + context
+        messages = [
+            {"role": "system", 
+             "content": "I need you to act as a line producer with expertise in local locations, compliance issues, and cultural nuances. You have a strong understanding of the risks involved in film production, especially related to location-specific factors. You are also skilled in budgeting for films, including compliance costs, and creating detailed itineraries to ensure compliance. Your knowledge covers locations worldwide, from big cities to small towns in every country. Given this expertise, provide advice using critical thinking based on further details I will provide, such as crew size, equipment (like cameras), and the type of shoot (indoor, outdoor, corporate, or blog). Offer two options when appropriate. Your response should include a comprehensive overview, and feel free to ask questions to better understand my production needs."
+             }] + context
         messages.append({"role": "user", "content": user_message})
         
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages
         )
-        
+
         ai_response = completion.choices[0].message
         input_tokens = completion.usage.total_tokens
         output_tokens = completion.usage.total_tokens
@@ -101,25 +104,25 @@ class AIChatConsumer(AsyncWebsocketConsumer):
 
         logger.info(f"AI response: {ai_response.content}")
         return ai_response.content, input_tokens, output_tokens, response_cost
-    
+
     async def generate_embedding(self, text):
         # Call OpenAI's embeddings API to get the embedding for the text
         response = client.embeddings.create(input=text, model="text-embedding-3-small")
-        
+
         cost_per_token = 0.00000002  # Replace with actual cost per token for embeddings
         tokens_used = response.usage.total_tokens
         cost = tokens_used * cost_per_token
 
         # Log the cost
         logger.info(f"Tokens used for embedding: {tokens_used}, Cost: ${cost:.4f}")
-        
+
          # Extract the embedding based on the actual structure of the response
         if len(response.data) > 0 and hasattr(response.data[0], 'embedding'):
             return response.data[0].embedding , cost
         else:
             # Handle cases where the structure might be different
             raise ValueError("Response object does not contain 'embedding' attribute or is empty.")
-    
+
     @database_sync_to_async
     def get_relevant_messages(self, session_id, embedding):
         # Retrieve the last 10 messages for this session
@@ -146,7 +149,6 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             context.append({"role": "assistant", "content": msg.ai_response})
 
         return context
-
 
     @database_sync_to_async
     def get_user(self, user_id):

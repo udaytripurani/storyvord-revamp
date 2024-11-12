@@ -83,3 +83,24 @@ class EventView(APIView):
         event = get_object_or_404(Event, pk=pk, calendar=calendar)
         event.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    
+#V2 APIs
+
+class CalendarViewV2(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CalendarSerializer
+
+    def get(self, request, project_id=None):
+        if project_id:
+            calendar = get_object_or_404(Calendar, project=project_id)
+            serializer = self.serializer_class(calendar)
+        else:
+            calendars = Calendar.objects.filter(
+                project__crew_profiles=request.user
+            ).distinct() | Calendar.objects.filter(
+                project__user=request.user
+            ).distinct()
+
+            serializer = self.serializer_class(calendars, many=True)
+        return Response(serializer.data)
