@@ -82,7 +82,11 @@ class SavePersonalInfoView(APIView):
                             if crew_profile_serializer.is_valid():
                                 crew_profile_serializer.save(user=user, personal_info=personal_info_instance)
                             else:
-                                return Response(crew_profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)              
+                                return Response(crew_profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # Update user stage
+                    user.user_stage = '2'
+                    user.save()
                         
                 except Exception as e:
                     logger.error(f"Error in SavePersonalInfoView: {e}")
