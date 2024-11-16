@@ -93,7 +93,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         messages.append({"role": "user", "content": user_message})
         
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages
         )
 

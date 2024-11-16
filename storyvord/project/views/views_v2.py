@@ -1,11 +1,13 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q
+from accounts.models import Permission as AccountPermission
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, 
     Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,
@@ -237,3 +239,73 @@ class MembershipViewSet(viewsets.ModelViewSet):
         membership.save()
 
         return Response({'message': 'Membership created successfully'}, status=status.HTTP_201_CREATED)
+    
+class FirstProjectView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        try:
+            user=request.user
+            data=request.data
+            project_details = data['project_details']
+            print(project_details)
+            
+            create_project_permission = AccountPermission.objects.get(name='create_project')
+            user_type = user.user_type
+        
+            if user_type is None or not user_type.permissions.filter(id=create_project_permission.id).exists():
+                raise PermissionDenied("You don't have permission to create a project.")
+        
+            project_details['owner'] = user
+        
+            try:
+                project = ProjectDetails.objects.create(**project_details)
+                print(project)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+            admin_role = Role.objects.filter(name='admin').first()  # Adjust the role name as necessary
+        
+            if admin_role:
+                Membership.objects.create(user=user, role=admin_role, project=project)
+            
+            project_requirements_data = {
+                "project": project,
+                "budget_currency": data.get("budget_currency", "$"),
+                "budget": data.get("budget"),
+                "created_by": user,
+                "updated_by": user,
+            }
+            project_requirements = ProjectRequirements.objects.create(**project_requirements_data)
+
+            # Process crew requirements
+            for crew_item in data.get("crew_requirements", []):
+                crew_obj, _ = ProjectCrewRequirement.objects.update_or_create(
+                    project=project,
+                    crew_title=crew_item.get("title"),
+                    defaults={"quantity": crew_item.get("quantity", 1)}
+                )
+                project_requirements.crew_requirements.add(crew_obj)
+
+            # Process equipment requirements
+            for equipment_item in data.get("equipment_requirements", []):
+                equipment_obj, _ = ProjectEquipmentRequirement.objects.update_or_create(
+                    project=project,
+                    equipment_title=equipment_item.get("title"),
+                    defaults={"quantity": equipment_item.get("quantity", 1)}
+                )
+                project_requirements.equipment_requirements.add(equipment_obj)
+
+            return Response({
+                'success': True,
+                'message': 'First project created successfully',
+                'data': {
+                    'project': ProjectDetailsSerializer(project).data,
+                    'project_requirements': ProjectRequirementsSerializer(project_requirements).data
+                }
+                },status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+        except KeyError:
+            return Response({'error': 'Project details not found in request data'}, status=status.HTTP_400_BAD_REQUEST)
