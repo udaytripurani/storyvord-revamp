@@ -17,6 +17,8 @@ from ..serializers.serializers_v2 import (
     RoleSerializer, MembershipSerializer
 )
 
+from project.utils import project_ai_suggestion
+
 # Project Viewset
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = ProjectDetails.objects.all()
@@ -309,3 +311,19 @@ class FirstProjectView(APIView):
             
         except KeyError:
             return Response({'error': 'Project details not found in request data'}, status=status.HTTP_400_BAD_REQUEST)
+
+class SuggestionView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        try:
+            project_id = request.data['project_id']
+            return Response({
+                    'success': True,
+                    'message': 'Data',
+                    'data': {
+                        'project_id': project_id,
+                        'suggestion': project_ai_suggestion(project_id)
+                    }
+                }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

@@ -88,6 +88,17 @@ class ProjectRequirementsSerializer(serializers.ModelSerializer):
 
 # Shooting Details Serializer
 class ShootingDetailsSerializer(serializers.ModelSerializer):
+    
     class Meta:
         model = ShootingDetails
         fields = '__all__'
+        extra_kwargs = {
+            'created_by': {'read_only': True},
+            'updated_by': {'read_only': True},
+        }
+        
+    def create(self, validated_data):
+        user = self.context['request'].user
+        validated_data['created_by'] = user
+        validated_data['updated_by'] = user
+        return ShootingDetails.objects.create(**validated_data)

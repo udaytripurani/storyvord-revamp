@@ -195,3 +195,16 @@ class ShootingDetails(models.Model):
     
     def __str__(self):
         return f"{self.project.name} - Shooting at {self.location}"
+    
+class ProjectAISuggestions(models.Model):
+    project = models.OneToOneField(Project, on_delete=models.CASCADE)
+    suggested_budget = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    suggested_compliance = models.TextField(null=True, blank=True)
+    suggested_culture = models.TextField(null=True, blank=True)
+    suggested_logistics = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"AI Suggestions for {self.project.name}"
+
