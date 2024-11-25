@@ -5,17 +5,22 @@ from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
 from django.db.models import Q
 from accounts.models import Permission as AccountPermission
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, 
-    Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,
+    Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,ProjectAISuggestions
 )
+from decimal import Decimal , InvalidOperation
 from ..serializers.serializers_v2 import (
     ProjectDetailsSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
-    RoleSerializer, MembershipSerializer
+    RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer
 )
+
+import uuid
+from django.http import JsonResponse
+from project.utils import project_ai_suggestion
 
 # Project Viewset
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -194,11 +199,39 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 # Shooting Details Viewset
+#TODO : Complete shoot details
 class ShootingDetailsViewSet(viewsets.ModelViewSet):
     queryset = ShootingDetails.objects.all()
     serializer_class = ShootingDetailsSerializer
     permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        Only return shooting details of a project if the user has access.
+        """
+        project_id = self.request.query_params.get('project_id')
+        user = self.request.user
+        if not project_id:
+            raise ValidationError({"error": "project_id is required."})
 
+        # Validate UUID format
+        try:
+            project_id = uuid.UUID(project_id)
+        except ValueError:
+            raise ValidationError({"error": "Invalid project_id format. Must be a valid UUID."})
+
+        # Check if the project exists
+        try:
+            project = ProjectDetails.objects.get(project_id=project_id)
+            print(project)
+        except ProjectDetails.DoesNotExist:
+            raise NotFound({"error": "Project not found."})
+        
+        if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
+            raise PermissionDenied("You do not have permission to access this project.")
+
+        # Return the filtered queryset
+        return ShootingDetails.objects.filter(project=project).distinct()
 
 # Role Viewset
 class RoleViewSet(viewsets.ModelViewSet):
@@ -242,40 +275,48 @@ class MembershipViewSet(viewsets.ModelViewSet):
     
 class FirstProjectView(APIView):
     permission_classes = [IsAuthenticated]
+    
     def post(self, request):
         try:
-            user=request.user
-            data=request.data
-            project_details = data['project_details']
-            print(project_details)
+            print("Request data: ", request.data)
+            user = request.user
+            data = request.data
             
-            create_project_permission = AccountPermission.objects.get(name='create_project')
-            user_type = user.user_type
-        
-            if user_type is None or not user_type.permissions.filter(id=create_project_permission.id).exists():
-                raise PermissionDenied("You don't have permission to create a project.")
-        
-            project_details['owner'] = user
-        
-            try:
-                project = ProjectDetails.objects.create(**project_details)
-                print(project)
-            except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            if 'project_details' not in data:
+                raise KeyError("Project details not found in request data")
             
-            admin_role = Role.objects.filter(name='admin').first()  # Adjust the role name as necessary
-        
-            if admin_role:
-                Membership.objects.create(user=user, role=admin_role, project=project)
+            project_serializer = ProjectDetailsSerializer(data=data['project_details'], context={'request': request})
+            project_serializer.is_valid(raise_exception=True)
+            project = project_serializer.save(owner=user)
+            print("Project created: ", project)
             
+            project_requirements = data.get('project_requirement')
+            print("Project requirements: ", project_requirements)
             project_requirements_data = {
                 "project": project,
-                "budget_currency": data.get("budget_currency", "$"),
-                "budget": data.get("budget"),
+                "budget_currency": project_requirements.get("budget_currency"),
+                "budget": project_requirements.get("budget"),
                 "created_by": user,
                 "updated_by": user,
             }
             project_requirements = ProjectRequirements.objects.create(**project_requirements_data)
+            print("Project requirements created: ", project_requirements)
+            
+            shoot_details = []
+            for shooting_detail in data.get("shooting_details", []):
+                shooting_details_data = {
+                    "project": project,
+                    "location": shooting_detail.get("location"),
+                    "start_date": shooting_detail.get("start_date"),
+                    "end_date": shooting_detail.get("end_date"),
+                    "mode_of_shooting": shooting_detail.get("mode_of_shooting"),
+                    "permits": shooting_detail.get("permits"),
+                    "created_by": user,
+                    "updated_by": user,
+                }
+                shooting_details = ShootingDetails.objects.create(**shooting_details_data)  
+                shoot_details.append(ShootingDetailsSerializer(shooting_details).data)
+                print("Shooting details created: ", shooting_details)
 
             # Process crew requirements
             for crew_item in data.get("crew_requirements", []):
@@ -285,6 +326,7 @@ class FirstProjectView(APIView):
                     defaults={"quantity": crew_item.get("quantity", 1)}
                 )
                 project_requirements.crew_requirements.add(crew_obj)
+                print("Crew requirement created: ", crew_obj)
 
             # Process equipment requirements
             for equipment_item in data.get("equipment_requirements", []):
@@ -294,18 +336,62 @@ class FirstProjectView(APIView):
                     defaults={"quantity": equipment_item.get("quantity", 1)}
                 )
                 project_requirements.equipment_requirements.add(equipment_obj)
+                print("Equipment requirement created: ", equipment_obj)
 
             return Response({
                 'success': True,
                 'message': 'First project created successfully',
                 'data': {
                     'project': ProjectDetailsSerializer(project).data,
-                    'project_requirements': ProjectRequirementsSerializer(project_requirements).data
+                    'project_requirements': ProjectRequirementsSerializer(project_requirements).data,
+                    'shooting_details': shoot_details
                 }
-                },status=status.HTTP_201_CREATED)
+            }, status=status.HTTP_201_CREATED)
 
+        except KeyError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class SuggestionView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            project_id = request.data['project_id']
+            project = get_object_or_404(ProjectDetails, project_id=project_id)
+            print(f"Project object type: {type(project)}, Value: {project}")
+            suggestion = project_ai_suggestion(project_id)
+            data = suggestion.get('data', [])
+            for item in data:
+                shoot_item = ShootingDetails.objects.get(id=item['id'])
+                try:
+                    project_suggestion, created = ProjectAISuggestions.objects.get_or_create(
+                        project=project,
+                        shoot=shoot_item,
+                        defaults={
+                            'suggested_budget': item['ai_suggestion'][0].get('budget'),
+                            'suggested_compliance': item['ai_suggestion'][0].get('compliance'),
+                            'suggested_culture': item['ai_suggestion'][0].get('culture'),
+                            'suggested_logistics': item['ai_suggestion'][0].get('logistics')
+                        }
+                    )
+                    if not created:
+                        project_suggestion.suggested_budget = item['ai_suggestion'][0].get('budget')
+                        project_suggestion.suggested_compliance = item['ai_suggestion'][0].get('compliance')
+                        project_suggestion.suggested_culture = item['ai_suggestion'][0].get('culture')
+                        project_suggestion.suggested_logistics = item['ai_suggestion'][0].get('logistics')
+                        project_suggestion.save()
+                except Exception as e:
+                    print(str(e))
             
-        except KeyError:
-            return Response({'error': 'Project details not found in request data'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                    'success': True,
+                    'message': 'Data',
+                    'data': {
+                        'project_id': project_id,
+                        'suggestion': suggestion
+                    }
+                }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

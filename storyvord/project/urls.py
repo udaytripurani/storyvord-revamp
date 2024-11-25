@@ -30,4 +30,5 @@ router.register(r'memberships', MembershipViewSet, basename='memberships')
 urlpatterns += [
     path('v2/', include(router.urls)),
     path('v2/firstproject/', FirstProjectView.as_view(), name='firstproject'),
+    path('v2/suggestion/', SuggestionView.as_view(), name='suggestion'),
 ]
