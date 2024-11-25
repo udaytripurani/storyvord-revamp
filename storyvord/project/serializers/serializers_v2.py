@@ -2,7 +2,7 @@ from rest_framework import serializers
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, 
     Role, Permission, Membership,
-    ProjectCrewRequirement, ProjectEquipmentRequirement
+    ProjectCrewRequirement, ProjectEquipmentRequirement, ProjectAISuggestions
 )
 from accounts.models import Permission as AccountPermission
 from rest_framework.exceptions import PermissionDenied
@@ -102,3 +102,8 @@ class ShootingDetailsSerializer(serializers.ModelSerializer):
         validated_data['created_by'] = user
         validated_data['updated_by'] = user
         return ShootingDetails.objects.create(**validated_data)
+    
+class ProjectAISuggestionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectAISuggestions
+        fields = '__all__'
