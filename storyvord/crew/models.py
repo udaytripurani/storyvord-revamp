@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from accounts.models import User,PersonalInfo
 from django.conf import settings
-from storyvord_calendar.models import Event
+# from storyvord_calendar.models import Event
 
 
 # Create your models here.
@@ -100,31 +100,31 @@ class EmailAgreement(models.Model):
     document = models.FileField(upload_to='portfolio/document/', blank=True, null=True)
 
 
-class CrewCalendar(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='crew_calendar')
-    name = models.CharField(max_length=255)
+# class CrewCalendar(models.Model):
+#     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='crew_calendar')
+#     name = models.CharField(max_length=255)
 
-    def __str__(self):
-        return self.name
+#     def __str__(self):
+#         return self.name
     
-class CrewEvent(models.Model):
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='crew_events')
-    crew_member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='crew_events')
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
-    start = models.DateTimeField()
-    end = models.DateTimeField()
-    location = models.CharField(max_length=255, blank=True, null=True)
+# class CrewEvent(models.Model):
+#     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='crew_events')
+#     crew_member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='crew_events')
+#     title = models.CharField(max_length=255)
+#     description = models.TextField(blank=True, null=True)
+#     start = models.DateTimeField()
+#     end = models.DateTimeField()
+#     location = models.CharField(max_length=255, blank=True, null=True)
 
-    def __str__(self):
-        return self.title
+#     def __str__(self):
+#         return self.title
     
-    def clean(self):
-        overlapping_events = CrewEvent.objects.filter(
-            crew_member=self.crew_member,
-            start__lt=self.end,
-            end__gt=self.start
-        ).exclude(pk=self.pk)
+#     def clean(self):
+#         overlapping_events = CrewEvent.objects.filter(
+#             crew_member=self.crew_member,
+#             start__lt=self.end,
+#             end__gt=self.start
+#         ).exclude(pk=self.pk)
         
-        if overlapping_events.exists():
-            raise ValidationError("This crew member has another event at the same time.")
+#         if overlapping_events.exists():
+#             raise ValidationError("This crew member has another event at the same time.")

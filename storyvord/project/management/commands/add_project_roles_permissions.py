@@ -12,6 +12,10 @@ class Command(BaseCommand):
             ("edit", "Can edit project"),
             ("add_members", "Can add members to project"),
             ("create_task", "Can create task"),
+            ("create_calander_event", "Can create calander event"),
+            ("view_calander_event", "Can view calander"),
+            ("edit_calander_event", "Can edit calander"),
+            ("delete_calander_event", "Can delete calander event"),
         ]
 
         # Add permissions
@@ -50,6 +54,14 @@ class Command(BaseCommand):
             ("admin", "edit"),
             ("admin", "add_members"),
             ("admin", "create_task"),
+            ("admin", "create_calander_event"),
+            ("admin", "view_calander_event"),
+            ("admin", "delete_calander_event"),
+
+            # Note: edit_calander?
+            ("admin", "edit_calander_event"),
+
+            ("member", "view_calander_event"),
             ("member", "view"),
         ]
 
