@@ -113,13 +113,16 @@ class PersonalInfoSerializer(serializers.ModelSerializer):
             'user': {'read_only': True}  # Prevent user from being included in the input data
         }
 
-    def validate(self, data):
-        user = self.context.get('user')
-        user_id = user.id if user else None
-        if user_id is not None:
-            if PersonalInfo.objects.filter(user_id=user_id).exists():
-                raise serializers.ValidationError("Personal info already exists for the user.")
-        return data
+    # def validate(self, data):
+    #     user = self.context.get('user')
+    #     user_id = user.id if user else None
+    #     if user_id is not None:
+    #         if PersonalInfo.objects.filter(user_id=user_id).exists():
+    #             if self.context.get('request').method == 'PUT':
+    #                 pass
+    #             else:
+    #                 raise serializers.ValidationError("Personal info already exists for the user.")
+    #     return data
         
 class ClientProfileSerializer(serializers.ModelSerializer):
     class Meta:

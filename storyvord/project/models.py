@@ -207,4 +207,3 @@ class ProjectAISuggestions(models.Model):
 
     def __str__(self):
         return f"AI Suggestions for {self.project.name}"
-

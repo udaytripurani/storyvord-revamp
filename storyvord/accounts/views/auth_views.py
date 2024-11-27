@@ -13,6 +13,9 @@ from ..serializers.serializers_v2 import V2RegisterSerializer, V2LoginSerializer
 from accounts.models import User
 import datetime
 
+import logging
+logger = logging.getLogger(__name__)
+
 class RegisterViewV2(APIView):
     serializer_class = V2RegisterSerializer
 
@@ -36,13 +39,11 @@ class RegisterViewV2(APIView):
             # Get the user data from the serializer
             user_data = serializer.data
 
-            # Set the user's steps to 1
-            user.steps = '1'
-            # Save the user instance again to update the steps
-            user.save()
-
             # Send the verification email
             send_verification_email(user, token)
+
+            # Log the user registration
+            logger.info(f"User {user_data['email']} registered successfully")
 
             # Return a successful response
             return Response({
@@ -55,19 +56,40 @@ class RegisterViewV2(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except serializers.ValidationError as e:
+            # Get the error messages from the serializer
             error_messages = e.detail
             if 'non_field_errors' in error_messages:
                 message = error_messages['non_field_errors'][0]
             else:
+                # Get the first error message if there are multiple errors
                 message = next(iter(error_messages.values()))[0] 
+            logger.error(f"User registration failed: {message}")
             return Response({
                 "status": status.HTTP_409_CONFLICT,
-                "message": e.detail,
+                "message": message,
                 "data": None
             }, status=status.HTTP_409_CONFLICT)
             
+        except IntegrityError as e:
+            # Return an error response if the user already exists
+            if 'unique constraint' in str(e):
+                logger.error(f"User registration failed: {str(e)}")
+                return Response({
+                    "status": status.HTTP_409_CONFLICT,
+                    "message": "User already exists",
+                    "data": None
+                }, status=status.HTTP_409_CONFLICT)
+            else:
+                # Return an error response if something goes wrong
+                logger.error(f"User registration failed: {str(e)}")
+                return Response({
+                    "status": status.HTTP_400_BAD_REQUEST,
+                    "message": "Registration failed",
+                    "data": str(e)
+                }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # Return an error response if something goes wrong
+            logger.error(f"User registration failed: {str(e)}")
             return Response({
                 "status": status.HTTP_400_BAD_REQUEST,
                 "message": "Registration failed",
@@ -94,12 +116,14 @@ class LoginViewV2(APIView):
         try:
             serializer.is_valid(raise_exception=True)
             user = serializer.context['user']
+            logger.info(f'User {user.email} logged in successfully')
             
             # Check if the user's email is verified
             if not user.verified:
                 # Send verification email if not verified
                 token = get_tokens_for_user(user)['access']
                 send_verification_email(user, token)
+                logger.warning(f'User {user.email} email is not verified. A verification email has been sent.')
                 return Response({
                     "status": status.HTTP_400_BAD_REQUEST,
                     "message": "Email is not verified. A verification email has been sent."
@@ -108,6 +132,7 @@ class LoginViewV2(APIView):
             # Successful login, return user data and tokens
             user.last_login = datetime.datetime.now()
             user.save()
+            logger.info(f'User {user.email} logged in successfully')
             return Response({
                 "status": status.HTTP_200_OK,
                 "message": "User logged in successfully",
@@ -124,6 +149,7 @@ class LoginViewV2(APIView):
                 message = error_messages['non_field_errors'][0]
             else:
                 message = str(e)
+            logger.error(f'Login failed: {message}')
             return Response({
                 "status": status.HTTP_409_CONFLICT,
                 "message": message,
@@ -131,6 +157,7 @@ class LoginViewV2(APIView):
             }, status=status.HTTP_409_CONFLICT)
 
         except Exception as e:
+            logger.error(f'Login failed: {str(e)}')
             return Response({
                 "status": status.HTTP_400_BAD_REQUEST,
                 "message": "Login failed",

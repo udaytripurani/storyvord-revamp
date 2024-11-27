@@ -10,10 +10,10 @@ def project_ai_suggestion(project_id):
     shooting_details = ShootingDetails.objects.filter(project=project).values()
     
     class SuggestedData(BaseModel):
-        compliance: str
-        logistics: str
-        budget: str
-        culture: str
+        compliance: List[str]
+        logistics: List[str]
+        budget: List[str]
+        culture: List[str]
     
     class ShootingDetailsData(BaseModel):
         id: str
@@ -42,8 +42,8 @@ def project_ai_suggestion(project_id):
                     response_format=ProjectSuggestionsResponse,
                 )
 
-        suggestion = structured_crew_output(completion.choices[0].message.parsed)
-        return suggestion
+        structured_response = structured_crew_output(completion.choices[0].message.parsed)
+        return structured_response
     except Exception as e:
         print(f"Error : {e}")
         return {"message": "An error occurred while processing your request", "data": []}

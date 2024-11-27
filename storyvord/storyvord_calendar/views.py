@@ -280,4 +280,4 @@ class UserHomeCalendarView(APIView):
         except Exception as exc:
             print(f"Error: {exc}")
             response = custom_exception_handler(exc, self.get_renderer_context())
-            return responseesponse
+            return response

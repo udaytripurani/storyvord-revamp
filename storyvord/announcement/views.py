@@ -11,9 +11,11 @@ from accounts.models import User
 from project.models import Project
 from client.models import ClientProfile
 from storyvord.exception_handlers import custom_exception_handler
+from project.models import ProjectDetails
+from rest_framework import viewsets
+from rest_framework.exceptions import PermissionDenied
+from django.db.models import Q
 
-
-# Create your views here.
 class AnnouncementListCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = AnnouncementSerializer
@@ -159,3 +161,38 @@ class ProjectUserListAPIView(APIView):
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
+        
+class ProjectAnnouncementViewSet(viewsets.ModelViewSet):
+    queryset = ProjectAnnouncement.objects.all()
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProjectAnnouncementSerializer
+
+    def get_queryset(self):
+        project_id = self.request.data.get("project") or self.request.query_params.get("project")
+        if not project_id:
+            return ProjectAnnouncement.objects.none()
+            
+        user = self.request.user
+        is_authorized = ProjectDetails.objects.filter(
+            project_id=project_id
+        ).filter(
+            Q(owner=user) | Q(memberships__user=user)
+        ).exists()
+
+        # If authorized, return the ProjectAnnouncement queryset
+        if is_authorized:
+            return ProjectAnnouncement.objects.filter(project_id=project_id).distinct()
+        
+        # Return an empty queryset if the user is not authorized
+        return ProjectAnnouncement.objects.none()
+
+    # def post(self, request, project_id):
+    #     try:
+    #         project = get_object_or_404(ProjectDetails, pk=project_id)
+    #         serializer = ProjectAnnouncementSerializer(data=request.data)
+    #         serializer.is_valid(exception=True)
+    #         announcement = serializer.save(project=project)
+    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     except Exception as exc:
+    #         response = custom_exception_handler(exc, self.get_renderer_context())
+    #         return response
