@@ -24,6 +24,7 @@ from rest_framework import routers, permissions
 #from django.conf.urls import url
 from rest_framework_swagger.views import get_swagger_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from django.conf.urls.static import static
 
 
 # schema_view = get_schema_view(
@@ -66,3 +67,6 @@ urlpatterns = [
     path('api/chat/', include('chat.urls')),
     
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

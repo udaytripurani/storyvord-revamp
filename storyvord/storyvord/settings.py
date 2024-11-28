@@ -11,7 +11,7 @@ load_dotenv()
 
 SITE_URL = get_site_url()
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('SECRET_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -34,7 +34,6 @@ CSRF_TRUSTED_ORIGINS = ['https://storyvord-back-end-d432tn3msq-uc.a.run.app']
 INSTALLED_APPS = [
     'daphne',
     'channels',
-    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -68,7 +67,16 @@ INSTALLED_APPS = [
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
-    'allauth.socialaccount.providers.google'
+    'allauth.socialaccount.providers.google',
+    'storyvord_admin',
+    "unfold",  # before django.contrib.admin
+    "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.forms",  # optional, if special form elements are needed
+    "unfold.contrib.inlines",  # optional, if special inlines are needed
+    "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    "unfold.contrib.guardian",  # optional, if django-guardian package is used
+    "unfold.contrib.simple_history", # optional, if django-simple-history package is used
+    'django.contrib.admin'
 ]
 
 SITE_ID = 1
@@ -235,8 +243,16 @@ DEFAULT_FROM_EMAIL = 'no-reply@storyvord.com'  # The verified sender email addre
 DEFAULT_NO_REPLY_EMAIL = 'no-reply@storyvord.com'
 
 # Consider adding settings for static and media files for production
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+if not PROD:
+    STATIC_URL = '/static/'
+    STATICFILES_DIRS = [BASE_DIR / "static"]
+    STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -244,19 +260,20 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.azure_storage.AzureStorage",
-        "OPTIONS": {
-          'timeout': 20,
-          'expiration_secs': 500,
+
+if PROD:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+            "OPTIONS": {
+            'timeout': 20,
+            'expiration_secs': 500,
+            },
         },
-    },
-    "staticfiles": {
-        "BACKEND": "storages.backends.azure_storage.AzureStorage",
-    },
-}
+        "staticfiles": {
+            "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        },
+    }
 
 AZURE_CONTAINER=os.getenv('AZURE_CONTAINERS')
 AZURE_ACCOUNT_NAME=os.getenv('AZURE_ACCOUNT_NAMES')
@@ -300,3 +317,150 @@ SOCIALACCOUNT_FORMS = {
 
 # Disable the default behavior of logging in the user immediately after the social account is connected
 SOCIALACCOUNT_LOGIN_ON_GET = True
+
+
+#
+# UNFOLD SETTINGS
+#
+
+from django.templatetags.static import static
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
+
+def dashboard_callback(request, context):
+    """
+    Callback to prepare custom variables for index template which is used as dashboard
+    template. It can be overridden in application by creating custom admin/index.html.
+    """
+    context.update(
+        {
+            "sample": "example",  # this will be injected into templates/admin/index.html
+        }
+    )
+    return context
+
+
+def environment_callback(request):
+    """
+    Callback has to return a list of two values represeting text value and the color
+    type of the label displayed in top right corner.
+    """
+    return ["Production", "danger"] # info, danger, warning, success
+
+
+def badge_callback(request):
+    return 3
+
+def permission_callback(request):
+    return request.user.has_perm("sample_app.change_model")
+
+UNFOLD = {
+    "SITE_TITLE": "Storyvord",
+    "SITE_HEADER": "Storyvord",
+    "SITE_URL": "https://storyvord.com/",
+    # "SITE_ICON": lambda request: static("icon.svg"),  # both modes, optimise for 32px height
+    "SITE_ICON": {
+        "light": lambda request: static("icon-light.svg"),  # light mode
+        "dark": lambda request: static("icon-dark.svg"),  # dark mode
+    },
+    # "SITE_LOGO": lambda request: static("logo.svg"),  # both modes, optimise for 32px height
+    "SITE_LOGO": {
+        "light": lambda request: static("logo-light.svg"),  # light mode
+        "dark": lambda request: static("logo-dark.svg"),  # dark mode
+    },
+    "SITE_SYMBOL": "speed",  # symbol from icon set
+    "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "sizes": "32x32",
+            "type": "image/svg+xml",
+            "href": lambda request: static("favicon.svg"),
+        },
+    ],
+    "SHOW_HISTORY": True, # show/hide "History" button, default: True
+    "SHOW_VIEW_ON_SITE": True, # show/hide "View on site" button, default: True
+    "ENVIRONMENT": environment_callback,
+    "DASHBOARD_CALLBACK": dashboard_callback,
+    "THEME": "dark", # Force theme: "dark" or "light". Will disable theme switcher
+    "LOGIN": {
+        "image": lambda request: static("sample/login-bg.jpg"),
+        "redirect_after": lambda request: reverse_lazy("admin:APP_MODEL_changelist"),
+    },
+    "STYLES": [
+        lambda request: static("css/style.css"),
+    ],
+    "SCRIPTS": [
+        lambda request: static("js/script.js"),
+    ],
+    "COLORS": {
+        "font": {
+            "subtle-light": "107 114 128",
+            "subtle-dark": "156 163 175",
+            "default-light": "75 85 99",
+            "default-dark": "209 213 219",
+            "important-light": "17 24 39",
+            "important-dark": "243 244 246",
+        },
+        "primary": {
+            "50": "250 245 255",
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "168 85 247",
+            "600": "147 51 234",
+            "700": "126 34 206",
+            "800": "107 33 168",
+            "900": "88 28 135",
+            "950": "59 7 100",
+        },
+    },
+    "EXTENSIONS": {
+        "modeltranslation": {
+            "flags": {
+                "en": "🇬🇧",
+                "fr": "🇫🇷",
+                "nl": "🇧🇪",
+            },
+        },
+    },
+    "SIDEBAR": {
+        "show_search": False,  # Search in applications and models names
+        "show_all_applications": False,  # Dropdown with all applications and models
+        "navigation": [
+            {
+                "title": _("Navigation"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Dashboard"),
+                        "icon": "dashboard",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("admin:index"),
+                        "badge": badge_callback,
+                        "permission": lambda request: request.user.is_superuser,
+                    },
+                    {
+                        "title": _("Users"),
+                        "icon": "people",
+                        "link": "accounts/user/",
+                    },
+                ],
+            },
+        ],
+    },
+    "TABS": [
+        {
+            "models": [
+                "app_label.model_name_in_lowercase",
+            ],
+            "items": [
+                {
+                    "title": _("Your custom title"),
+                    "link": "",
+                    "permission": permission_callback,
+                },
+            ],
+        },
+    ],
+}

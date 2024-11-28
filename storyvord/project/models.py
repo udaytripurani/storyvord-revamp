@@ -130,12 +130,18 @@ class Role(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def __str__(self):
+        return self.name
+    
 class Membership(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='membership_role')
     project = models.ForeignKey('ProjectDetails', on_delete=models.CASCADE, null=True, blank=True, related_name='memberships')  # Null for global roles not tied to a project
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.role.name}"
 
 class ProjectDetails(models.Model):
     project_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
