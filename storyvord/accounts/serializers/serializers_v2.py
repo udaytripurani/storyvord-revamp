@@ -28,6 +28,8 @@ class V2RegisterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if 'email' not in data:
             raise serializers.ValidationError("Email field is required")
+        if User.objects.filter(email__iexact=data['email']).exists():
+            raise serializers.ValidationError("Email already exists (case insensitive)")
         if 'password' not in data:
             raise serializers.ValidationError("Password field is required")
         if 'confirm_password' not in data:
@@ -62,7 +64,7 @@ class V2LoginSerializer(serializers.Serializer):
     def validate(self, data):
         # Authenticate the user using email and password
         try:
-            user = User.objects.get(email=data['email'])
+            user = User.objects.get(email__iexact=data['email'])
         except User.DoesNotExist:
             raise serializers.ValidationError('Invalid email or password')
         
