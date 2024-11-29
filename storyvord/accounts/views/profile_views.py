@@ -199,6 +199,7 @@ class GetPersonalInfoView(APIView):
                     "email": user.email,
                     "user_type": user.user_type_id,
                     "user_stage": user.user_stage,
+                    "step": user.steps
                     },
                          }
             }, status=status.HTTP_200_OK)
@@ -223,6 +224,7 @@ class GetPersonalInfoView(APIView):
                     "email": user.email,
                     "user_type": user.user_type_id,
                     "user_stage": user.user_stage,
+                    "step": user.steps
                 },
                 "personal_info": personal_info,
                 "client_profile": client_profile
@@ -251,6 +253,7 @@ class GetPersonalInfoView(APIView):
                     "email": user.email,
                     "user_type": user.user_type_id,
                     "user_stage": user.user_stage,
+                    "step": user.steps
                 },
                 "personal_info": personal_info,
                 "crew_profile": crew_profile
