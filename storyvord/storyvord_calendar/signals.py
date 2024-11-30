@@ -5,6 +5,7 @@ from .models import UserCalender, ProjectCalendar
 from project.models import ProjectDetails, Project
 
 
+@receiver(post_save, sender=User)
 def create_user_calendar(sender, instance, created, **kwargs):
     if created:
         # Use get_or_create to avoid duplicate key violations
