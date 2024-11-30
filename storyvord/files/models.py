@@ -1,5 +1,5 @@
 from django.db import models
-from project.models import Project
+from project.models import ProjectDetails, Membership
 
 
 # Create your models here.
@@ -8,8 +8,8 @@ class Folder(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
     icon = models.TextField()
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='files', null=True, blank=True) 
-    allowed_users = models.ManyToManyField('accounts.User') 
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE, related_name='files') 
+    allowed_users = models.ManyToManyField(Membership, related_name='allowed_folders', blank=True) 
     default = models.BooleanField(default=False)
     created_by = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='created_folders')
 

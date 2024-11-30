@@ -4,6 +4,9 @@ from accounts.models import User
 from django.shortcuts import get_object_or_404
 import base64
 from django.core.files.base import ContentFile
+from project.models import Membership, ProjectDetails
+import uuid
+
 
 class Base64FileField(serializers.FileField):
     def to_internal_value(self, data):
@@ -23,7 +26,7 @@ class FileSerializer(serializers.ModelSerializer):
         
 class FolderSerializer(serializers.ModelSerializer):
     files = FileSerializer(many=True, required=False)
-    allowed_users = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True)
+    allowed_users = serializers.PrimaryKeyRelatedField(queryset=Membership.objects.all(), many=True)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
@@ -37,11 +40,20 @@ class FolderSerializer(serializers.ModelSerializer):
         return representation
 
     def validate(self, data):
-        project = data.get('project')
-        name = data.get('name')
-        if project and Folder.objects.filter(project=project, name=name).exists():
-            raise serializers.ValidationError({"detail": "Folder with the same name already exists in this project."})
-        return data
+        try:
+            project = data.get('project')
+            name = data.get('name')
+
+            project = ProjectDetails.objects.get(project_id=project.project_id)
+
+            # if project and Folder.objects.filter(project__project_id=project.project_id, name=name).exists():
+            if project and Folder.objects.filter(project = project, name=name).exists():
+                raise serializers.ValidationError({"detail": "Folder with the same name already exists in this project."})
+
+            return data
+        except Exception as e:
+            print(e)
+            raise serializers.ValidationError({"detail": "An error occurred."})
 
     def create(self, validated_data):
         request = self.context.get('request')
@@ -50,37 +62,48 @@ class FolderSerializer(serializers.ModelSerializer):
         # Ensure the user creating the folder is in allowed_users
         allowed_users = validated_data.pop('allowed_users', [])
         if user:
-            validated_data['created_by'] = user 
+            validated_data['created_by'] = user
             validated_data['default'] = False
-            if user not in allowed_users:
-                allowed_users.append(user)
+        
+            # Check if the user is part of the project and add them as a member
+            project = validated_data.get('project')
+            if project:
+                # Ensure user has a valid membership
+                membership = get_object_or_404(Membership, user=user, project=project.project_id)
+                if membership not in allowed_users:
+                    allowed_users.append(membership)
+
+        project = validated_data.get('project')
+
+        project = ProjectDetails.objects.get(project_id=project.project_id)    
+        validated_data['project'] = project
+        
+        print(validated_data)
 
         folder = Folder.objects.create(**validated_data)
-        
-        # Add the project owner to allowed_users
-        project_owner = folder.project.user
-        if project_owner not in allowed_users:
-            allowed_users.append(project_owner)
 
-
-        # Add allowed users to the folder
-        folder.allowed_users.set(allowed_users)
+        # Assign allowed_users to the folder
+        for membership in allowed_users:
+            folder.allowed_users.add(membership)
 
         return folder
-
 
 
         
 class FolderUpdateSerializer(serializers.ModelSerializer):
     files = FileSerializer(many=True, required=False)
-    allowed_users = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
-    add_users = serializers.ListField(child=serializers.EmailField(), write_only=True, required=False)
-    remove_users = serializers.ListField(child=serializers.EmailField(), write_only=True, required=False)
+    allowed_users = serializers.PrimaryKeyRelatedField(queryset=Membership.objects.all(), many=True, required=False)
     created_by = serializers.ReadOnlyField(source='created_by.id')
 
     class Meta:
         model = Folder 
-        fields = ['id', 'description', 'icon', 'name', 'project', 'default', 'files', 'allowed_users', 'add_users', 'remove_users', 'created_by']
+        fields = ['id', 'description', 'icon', 'name', 'project', 'default', 'files', 'allowed_users', 'created_by']
+
+    def check_rbac(self, user, project, permission_name):
+        membership = get_object_or_404(Membership, user=user, project=project)
+        if not membership.role.permission.filter(name=permission_name).exists():
+            return False
+        return True
 
     def validate(self, data):
         folder = self.instance
@@ -90,37 +113,9 @@ class FolderUpdateSerializer(serializers.ModelSerializer):
         if 'project' in data:
             raise serializers.ValidationError({"project": "You cannot change the project of a folder."})
 
-        # Prevent editing allowed_users directly
-        if 'allowed_users' in data:
-            raise serializers.ValidationError({"allowed_users": "You cannot update allowed_users field directly. Use 'add_users' and 'remove_users' fields instead."})
-
-        # Ensure the user is the owner of the project
-        if folder and folder.created_by != user and not folder.project.user == user:
-            raise serializers.ValidationError({"detail": "You do not have permission to edit this folder."})
 
         return data
     
-    def update(self, instance, validated_data):
-        add_users_emails = validated_data.pop('add_users', [])
-        remove_users_emails = validated_data.pop('remove_users', [])
-        
-        # Add users
-        for user_email in add_users_emails:
-            user = get_object_or_404(User, email=user_email)
-            if user not in instance.project.crew_profiles.all():
-                raise serializers.ValidationError({"add_users": f"User {user_email} is not part of the project crew."})
-            instance.allowed_users.add(user)
-        
-        # Remove users
-        for user_email in remove_users_emails:
-            user = get_object_or_404(User, email=user_email)
-            instance.allowed_users.remove(user)
-        
-        # Make sure the user performing the update is in the allowed_users list
-        if self.context['request'].user not in instance.allowed_users.all():
-            instance.allowed_users.add(self.context['request'].user)
-        
-        return super().update(instance, validated_data)
     
     def to_representation(self, instance):
         representation = super().to_representation(instance)
