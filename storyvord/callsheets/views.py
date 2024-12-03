@@ -2,18 +2,25 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
-from .models import CallSheet
-from .serializers import CallSheetSerializer
-from project.models import Project
+from .models import *
+from .serializers import *
 import requests
 from django.http import JsonResponse
 from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
 from storyvord.exception_handlers import custom_exception_handler
+from project.models import Membership, ProjectDetails   
 
 class CallSheetListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CallSheetSerializer
+    
+    def check_rbac(self, user, project, permission_name):
+        membership = get_object_or_404(Membership, user=user, project=project)
+        if not (membership.role.permission.filter(name=permission_name).exists()):
+            return False
+        return True
+
 
     def get(self, request, project_id):
         try:
@@ -30,12 +37,20 @@ class CallSheetListAPIView(APIView):
 
     def post(self, request, project_id):
         try:
-            project = get_object_or_404(Project, pk=project_id)
+            project = get_object_or_404(ProjectDetails, pk=project_id)
+
+            if not self.check_rbac(request.user, project, 'create_callsheet'):
+                raise PermissionError('You do not have permission to create callsheet for this project')
+            
             data = request.data.copy()
             data['project'] = project.project_id
 
             serializer = CallSheetSerializer(data=data)
-            serializer.is_valid(exception=True)
+
+
+            if not serializer.is_valid():
+                raise serializer.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -43,6 +58,7 @@ class CallSheetListAPIView(APIView):
             }
             return Response(data, status=status.HTTP_201_CREATED)
         except Exception as exc:
+            print(exc)
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
@@ -50,9 +66,21 @@ class CallSheetDetailAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CallSheetSerializer
 
+
+    def check_rbac(self, user, project, permission_name):
+        membership = get_object_or_404(Membership, user=user, project=project)
+        if not (membership.role.permission.filter(name=permission_name).exists()):
+            return False
+        return True
+
+
     def get(self, request, pk):
         try:
             call_sheet = get_object_or_404(CallSheet, pk=pk)
+            
+            if not Membership.objects.filter(user=request.user, project=call_sheet.project).exists():
+                raise PermissionError('You do not have permission to view callsheet for this project')
+            
             serializer = CallSheetSerializer(call_sheet)
             data = {
                 'message': 'Success',
@@ -66,8 +94,17 @@ class CallSheetDetailAPIView(APIView):
     def put(self, request, pk):
         try:
             call_sheet = get_object_or_404(CallSheet, pk=pk)
+
+            
+            if not self.check_rbac(request.user, call_sheet.project, 'edit_callsheet'):
+                raise PermissionError('You do not have permission to edit callsheet for this project')
+            
+            
             serializer = CallSheetSerializer(call_sheet, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
             serializer.save()
             data = {
                 'message': 'Success',
@@ -82,9 +119,14 @@ class CallSheetDetailAPIView(APIView):
     def delete(self, request, pk):
         try:
             call_sheet = get_object_or_404(CallSheet, pk=pk)
+
+            if not self.check_rbac(request.user, call_sheet.project, 'delete_callsheet'):
+                raise PermissionError('You do not have permission to delete callsheet for this project')
+            
             call_sheet.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as exc:
+            print(exc)
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 

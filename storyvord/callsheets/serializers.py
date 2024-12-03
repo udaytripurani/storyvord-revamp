@@ -52,6 +52,13 @@ class CallSheetSerializer(serializers.ModelSerializer):
         model = CallSheet
         fields = '__all__'
 
+    def validate(self, data):
+        date = data.get('date')
+        today = datetime.today().date()
+        if date <= today:
+            raise serializers.ValidationError("Date must be in the future")
+        return data
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         ret['events'] = EventSerializer(instance.events.all(), many=True).data
