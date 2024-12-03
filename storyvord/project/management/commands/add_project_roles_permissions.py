@@ -24,6 +24,11 @@ class Command(BaseCommand):
             ("create_folder", "Can create a folder in a project"),
             ("edit_folder", "Can edit a folder in a project"),
             ("delete_folder", "Can delete a folder in a project"),
+
+            # CallSheet permissions
+            ("create_callsheet", "Can create callsheet"),
+            ("edit_callsheet", "Can edit callsheet"),
+            ("delete_callsheet", "Can delete callsheet"),
         ]
 
         # Add permissions
@@ -70,6 +75,10 @@ class Command(BaseCommand):
             ("admin", "create_folder"),
             ("admin", "edit_folder"),
             ("admin", "delete_folder"),
+
+            ("admin", "create_callsheet"),
+            ("admin", "edit_callsheet"),
+            ("admin", "delete_callsheet"),
 
             # Note: edit_calander?
             ("admin", "edit_calander_event"),

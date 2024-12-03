@@ -1,9 +1,9 @@
 # callsheets/models.py
 from django.db import models
-from project.models import Project
+from project.models import ProjectDetails
 
 class CallSheet(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     date = models.DateField(null=True, blank=True)
     calltime = models.TimeField(null=True, blank=True)
