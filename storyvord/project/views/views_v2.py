@@ -290,6 +290,13 @@ class MembershipViewSet(viewsets.ModelViewSet):
     serializer_class = MembershipSerializer
     permission_classes = [IsAuthenticated]
     
+    def get_queryset(self):
+        return Membership.objects.filter(
+            Q(project=self.request.query_params.get('project_id'))&
+            Q(project__owner=self.request.user)&
+            Q(project__memberships__user=self.request.user)
+        ).distinct()
+    
     def create(self, request, *args, **kwargs):
         data = request.data
         user_id = data.get('user_id')
