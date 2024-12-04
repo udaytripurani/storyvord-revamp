@@ -65,6 +65,7 @@ urlpatterns = [
     #Web view for Chat bot
     path('api/', include('ai_assistant.urls')),
     path('api/chat/', include('chat.urls')),
+    path('api/network/', include('network.urls')),
 ]
 
 if settings.DEBUG:
