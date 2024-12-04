@@ -64,6 +64,9 @@ INSTALLED_APPS = [
     'inbox',
     'ai_assistant',
     'chat',
+    'network',
+
+
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
