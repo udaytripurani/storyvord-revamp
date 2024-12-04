@@ -18,7 +18,7 @@ from ..serializers.serializers_v2 import (
     RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer
 )
 
-import uuid
+from uuid import UUID
 from django.http import JsonResponse
 from project.utils import project_ai_suggestion
 
@@ -45,17 +45,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
         """
         Override get_object to provide a more specific error when a project is not found or the user doesn't have access.
         """
-
-        try:
-            # Check if the project exists and if the user is either the owner or a member
-            queryset = self.get_queryset()
-            obj = get_object_or_404(queryset, pk=self.kwargs.get('pk'))  # Adjust if you're using a different identifier
-            logger.info(f"User {self.request.user.id} accessed project {obj.id}")
-            return obj
-        except ProjectDetails.DoesNotExist:
-            # Return a clear error message if the project does not exist or the user has no access
-            logger.warning(f"User {self.request.user.id} tried to access project {self.kwargs.get('pk')} which does not exist or they have no access")
-            raise PermissionDenied("You do not have permission to access this project or the project does not exist.")
+        return ProjectDetails.objects.filter(
+            Q(owner=self.request.user) | 
+            Q(memberships__user=self.request.user)
+        ).distinct().get(pk=self.kwargs['pk'])
     
     # Create a custom action for creating a project-specific role
     #TODO need to add permission check here ->
@@ -119,16 +112,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
     
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
-    queryset = ProjectRequirements.objects.all()
+    # queryset = ProjectRequirements.objects.all()
     serializer_class = ProjectRequirementsSerializer
     permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """
-        Only return projects where the user is either the owner or a member.
-        Non-members should not be able to access any project details.
-        """
-        return ProjectRequirements.objects.filter(project_id=self.request.data.get("project")).distinct()
+    
+    def get_object(self):
+        return ProjectRequirements.objects.get(project=self.kwargs['pk'])
 
     def create(self, request, *args, **kwargs):
         data = request.data
