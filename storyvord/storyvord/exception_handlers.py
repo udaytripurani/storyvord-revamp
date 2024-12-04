@@ -108,6 +108,13 @@ def custom_exception_handler(exc, context):
             "message": "A network error occurred. Please try again later.",
         }
         return Response(custom_response, status=status.HTTP_502_BAD_GATEWAY)
+    if isinstance(exc, PermissionError):
+        custom_response = {
+            "status": False,
+            "code": status.HTTP_403_FORBIDDEN,
+            "message": str(exc),
+        }
+        return Response(custom_response, status=status.HTTP_403_FORBIDDEN)
     custom_response = {
     "status": False,
     "code": status.HTTP_500_INTERNAL_SERVER_ERROR,

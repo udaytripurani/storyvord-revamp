@@ -7,6 +7,9 @@ from ..serializers.serializers_v2 import V2EmailVerificationSerializer
 from utils.env_utils import get_bool_env_var
 from django.http import HttpResponseRedirect
 
+import logging
+logger = logging.getLogger(__name__)
+
 PROD = get_bool_env_var('PROD')
 
 class VerifyEmail(APIView):
@@ -20,10 +23,14 @@ class VerifyEmail(APIView):
                 user.verified = True
                 user.save()
                 send_welcome_email(user)
+                logger.info(f"Email for user {user.email} verified")
                 if PROD:
-                    return HttpResponseRedirect(redirect_to="https://www.storyvord.com/auth/sign-in")
+                    logger.info(f"Redirecting to production login")
+                    return HttpResponseRedirect(redirect_to="https://staging.storyvord.com/auth/sign-in")
                 else:
+                    logger.info(f"Redirecting to development login")
                     return HttpResponseRedirect(redirect_to="https://dev.storyvord.com/auth/sign-in")
             return Response({"message": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            logger.error(f"Error verifying email: {str(e)}")
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)

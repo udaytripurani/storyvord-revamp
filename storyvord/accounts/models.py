@@ -70,14 +70,14 @@ class PersonalInfo(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=256, null=True, blank=True)
     contact_number = models.CharField(max_length=256, null=True, blank=True)
-    image = models.ImageField(max_length=256, upload_to='profile_images/', blank=True, null=True)
+    image = models.ImageField(max_length=256, upload_to='profile_images/', blank=True, null=True)  #TODO : Add default image and put it in blob storage.
     location = models.CharField(max_length=256, null=True, blank=True)
     languages = models.CharField(max_length=256, null=True, blank=True)
     job_title = models.CharField(max_length=256, null=True, blank=True)
     bio = models.TextField(null=True, blank=True)
 
     def __str__(self):
-        return self.name
+        return self.full_name
     
 class Country(models.Model):
     name = models.CharField(max_length=100, unique=True)

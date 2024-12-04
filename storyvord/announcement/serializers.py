@@ -1,6 +1,6 @@
 # serializers.py
 from rest_framework import serializers
-from .models import Announcement
+from .models import Announcement, ProjectAnnouncement
 from accounts.models import User
 
 class AnnouncementSerializer(serializers.ModelSerializer):
@@ -21,3 +21,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email']
+        
+class ProjectAnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectAnnouncement
+        fields = '__all__'

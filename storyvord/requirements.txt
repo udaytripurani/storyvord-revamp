@@ -145,3 +145,4 @@ wcwidth==0.2.13
 whitenoise==6.7.0
 zope.interface==7.0.3
 django-allauth>=0.43.0
+django-unfold==0.42.0

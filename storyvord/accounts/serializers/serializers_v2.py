@@ -8,6 +8,8 @@ from django.contrib.auth import authenticate
 from django.db import IntegrityError
 import logging
 import datetime
+import base64
+from django.core.files.base import ContentFile
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,8 @@ class V2RegisterSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if 'email' not in data:
             raise serializers.ValidationError("Email field is required")
+        if User.objects.filter(email__iexact=data['email']).exists():
+            raise serializers.ValidationError("Email already exists (case insensitive)")
         if 'password' not in data:
             raise serializers.ValidationError("Password field is required")
         if 'confirm_password' not in data:
@@ -62,7 +66,7 @@ class V2LoginSerializer(serializers.Serializer):
     def validate(self, data):
         # Authenticate the user using email and password
         try:
-            user = User.objects.get(email=data['email'])
+            user = User.objects.get(email__iexact=data['email'])
         except User.DoesNotExist:
             raise serializers.ValidationError('Invalid email or password')
         
@@ -112,14 +116,33 @@ class PersonalInfoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'user': {'read_only': True}  # Prevent user from being included in the input data
         }
+    
+    def validate_image(self, value):
+        # Check if the value is a Base64 string
+        if isinstance(value, str) and value.startswith("data:image"):
+            # Decode the Base64 string
+            format, imgstr = value.split(';base64,')  # Format is like 'data:image/png;base64'
+            ext = format.split('/')[-1]  # Extract the file extension (e.g., 'png')
+            value = ContentFile(base64.b64decode(imgstr), name=f"uploaded.{ext}")
+        return value
+    
+    def to_internal_value(self, data):
+        if 'image' in data and isinstance(data['image'], str) and data['image'].startswith("data:image"):
+            format, imgstr = data['image'].split(';base64,')
+            ext = format.split('/')[-1]
+            data['image'] = ContentFile(base64.b64decode(imgstr), name=f"uploaded.{ext}")
+        return super().to_internal_value(data)
 
-    def validate(self, data):
-        user = self.context.get('user')
-        user_id = user.id if user else None
-        if user_id is not None:
-            if PersonalInfo.objects.filter(user_id=user_id).exists():
-                raise serializers.ValidationError("Personal info already exists for the user.")
-        return data
+    # def validate(self, data):
+    #     user = self.context.get('user')
+    #     user_id = user.id if user else None
+    #     if user_id is not None:
+    #         if PersonalInfo.objects.filter(user_id=user_id).exists():
+    #             if self.context.get('request').method == 'PUT':
+    #                 pass
+    #             else:
+    #                 raise serializers.ValidationError("Personal info already exists for the user.")
+    #     return data
         
 class ClientProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -153,6 +176,13 @@ class UnifiedProfileSerializer(serializers.Serializer):
             raise serializers.ValidationError({"client_profile": "Client profile data is required."})
         elif user_type_id == 2 and 'crew_profile' not in data:
             raise serializers.ValidationError({"crew_profile": "Crew profile data is required."})
+        
+        personal_info_data = data.get('personal_info')
+        if personal_info_data and 'image' in personal_info_data:
+            image = personal_info_data.get('image')
+            if isinstance(image, str) and image.startswith("data:image"):
+                # Base64 decode the image if it's a string (handled by PersonalInfoSerializer)
+                personal_info_data['image'] = self.fields['personal_info'].fields['image'].to_internal_value(image)
         return data
 
 class V2EmailVerificationSerializer(serializers.ModelSerializer):
