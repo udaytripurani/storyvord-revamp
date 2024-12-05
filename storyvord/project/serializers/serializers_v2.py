@@ -80,7 +80,7 @@ class ProjectRequirementsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProjectRequirements
-        fields = ['project', 'budget_currency', 'budget', 'crew_requirements', 'equipment_requirements', 'created_at', 'updated_at']
+        fields = ['id','project', 'budget_currency', 'budget', 'crew_requirements', 'equipment_requirements', 'created_at', 'updated_at']
         
     def create(self, validated_data):
         return ProjectRequirements.objects.create(**validated_data)

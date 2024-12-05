@@ -253,7 +253,7 @@ class GetPersonalInfoView(APIView):
                     "email": user.email,
                     "user_type": user.user_type_id,
                     "user_stage": user.user_stage,
-                    "step": user.steps
+                    "steps": user.steps
                 },
                 "personal_info": personal_info,
                 "crew_profile": crew_profile

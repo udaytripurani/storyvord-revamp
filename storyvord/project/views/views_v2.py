@@ -17,8 +17,7 @@ from ..serializers.serializers_v2 import (
     ProjectDetailsSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
     RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer
 )
-
-from uuid import UUID
+import uuid
 from django.http import JsonResponse
 from project.utils import project_ai_suggestion
 
@@ -70,29 +69,31 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def add_member(self, request, pk=None):
         try:
             project = self.get_object()
+            logger.info(f"User {self.request.user.id} trying to add member to project {project}")
             
             user = request.data.get('user_id')
             role = request.data.get('role_id')
             
             if not user or not role:
-                logger.warning(f"User {self.request.user.id} tried to add member to project {project.id} with invalid data")
+                logger.warning(f"User {self.request.user.id} tried to add member to project {project} with invalid data")
                 return Response({'error': 'User and Role are required'}, status=status.HTTP_400_BAD_REQUEST)
             
             if Membership.objects.filter(project=project, user_id=user).exists():
-                    logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project.id} which is already a member")
+                    logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project} which is already a member")
                     return Response({'error': 'User is already a member of the project'}, status=status.HTTP_400_BAD_REQUEST)
-
+                
             if request.user == project.owner or Membership.objects.filter(
                 project=project, 
                 user=request.user,
                 role__permission__name='add_members'
             ).exists():
+                print(f"User is either the owner of the project or has the 'add_members' permission")
                 membership = Membership.objects.create(user_id=user, role_id=role, project=project)
                 membership.save()
-                logger.info(f"User {self.request.user.id} added member {user} to project {project.id}")
+                logger.info(f"User {self.request.user.id} successfully added member {user} to project {project}")
                 return Response({'message': 'Member added successfully'}, status=status.HTTP_201_CREATED)
             else:
-                logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project.id} which they do not have permission for")
+                logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project} which they do not have permission for")
                 raise PermissionDenied("You don't have permission to add members to this project.")
             
         except ProjectDetails.DoesNotExist:
@@ -102,22 +103,29 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         except PermissionDenied as e:
             # Catch and return permission-related errors
-            logger.warning(f"User {self.request.user.id} tried to add member to project {project.id} without permission")
+            logger.warning(f"User {self.request.user.id} tried to add member to project {project} without permission")
             return Response({'Permission error': str(e)}, status=status.HTTP_403_FORBIDDEN)
 
         except Exception as e:
             # General error handling
-            logger.error(f"User {self.request.user.id} tried to add member to project {project.id} with an unexpected error")
+            logger.error(f"User {self.request.user.id} tried to add member to project {project} with an unexpected error")
             return Response({'Exception error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
-    # queryset = ProjectRequirements.objects.all()
+    queryset = ProjectRequirements.objects.all()
     serializer_class = ProjectRequirementsSerializer
     permission_classes = [IsAuthenticated]
     
-    def get_object(self):
-        return ProjectRequirements.objects.get(project=self.kwargs['pk'])
+    def get_queryset(self):
+        return ProjectRequirements.objects.filter(
+            project=self.request.query_params.get('project_id')
+        )
+
+    # def get_object(self):
+    #     project = ProjectRequirements.objects.filter(project=self.kwargs['pk'])
+    #     print(project)
+    #     return project
 
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -126,7 +134,7 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
 
         # Permission check
         if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
-            logger.warning(f"User {user.id} tried to create requirements for project {project.id} without permission")
+            logger.warning(f"User {user} tried to create requirements for project {project} without permission")
             raise PermissionDenied("You do not have permission to create requirements for this project.")
 
         # Prepare data for ProjectRequirements
@@ -141,7 +149,7 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
         # Create ProjectRequirements instance
         try:
             project_requirements = ProjectRequirements.objects.create(**project_requirements_data)
-            logger.info(f"Project requirements created for project {project.id} by user {user.id}")
+            logger.info(f"Project requirements created for project {project} by user {user}")
 
             # Process crew requirements
             for crew_item in data.get("crew_requirements", []):
@@ -151,7 +159,7 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
                     defaults={"quantity": crew_item.get("quantity", 1)}
                 )
                 project_requirements.crew_requirements.add(crew_obj)
-                logger.info(f"Crew requirement added: {crew_item.get('title')} for project {project.id}")
+                logger.info(f"Crew requirement added: {crew_item.get('title')} for project {project}")
 
             # Process equipment requirements
             for equipment_item in data.get("equipment_requirements", []):
@@ -161,14 +169,14 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
                     defaults={"quantity": equipment_item.get("quantity", 1)}
                 )
                 project_requirements.equipment_requirements.add(equipment_obj)
-                logger.info(f"Equipment requirement added: {equipment_item.get('title')} for project {project.id}")
+                logger.info(f"Equipment requirement added: {equipment_item.get('title')} for project {project}")
 
             # Serialize and return the response
             serializer = self.get_serializer(project_requirements)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            logger.error(f"Error creating project requirements for project {project.id} by user {user.id}: {str(e)}")
+            logger.error(f"Error creating project requirements for project {project} by user {user}: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):

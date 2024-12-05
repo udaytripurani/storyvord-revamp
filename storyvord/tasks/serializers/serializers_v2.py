@@ -36,14 +36,29 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         try:
             assigned_to_data = validated_data.pop('assigned_to', [])
-            user_membership = Membership.objects.get(user=self.context['request'].user)
-            validated_data['assigned_by'] = user_membership
+            project = validated_data['project']
+            
+            # Get the Membership for the current user who is assigning the task
+            user_membership = Membership.objects.filter(project=project, user=self.context['request'].user).first()
+            if user_membership:
+                validated_data['assigned_by'] = user_membership
+            
+            # Create the task
             task = ProjectTask.objects.create(**validated_data)
-            task.assigned_to.set(assigned_to_data)
+
+            # Ensure assigned_to is populated with Membership instances
+            memberships = Membership.objects.filter(project=project, user_id__in=assigned_to_data)
+            if memberships.count() != len(assigned_to_data):
+                raise serializers.ValidationError({'assigned_to': 'One or more users are not members of the project.'})
+
+            # Set the many-to-many relationship using the Membership objects
+            task.assigned_to.set(memberships)
+
             return task
         except Exception as exc:
             print(f"Error in task creation: {exc}")
             raise exc
+
         
     def update(self, instance, validated_data):
         assigned_to_data = validated_data.pop('assigned_to', None)
