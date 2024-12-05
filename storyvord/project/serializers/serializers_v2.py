@@ -29,7 +29,7 @@ class MembershipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Membership
-        fields = ['user', 'role', 'project', 'created_at']
+        fields = ['id', 'user', 'role', 'project', 'created_at']
 
 # Project Serializer
 class ProjectDetailsSerializer(serializers.ModelSerializer):
