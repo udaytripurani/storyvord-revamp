@@ -7,6 +7,9 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from django.http import JsonResponse
 import logging
+from django.shortcuts import redirect
+from storyvord.exception_handlers import custom_exception_handler
+
 
 from client.models import ClientProfile
 from crew.models import CrewProfile
@@ -418,16 +421,22 @@ def google_custom_login_redirect(request):
         if request.user.auth_provider != 'google':
             user = request.user
             user.auth_provider = 'google'
+            user.verified = True
+            user.user_stage=0,
             user.save()
+
         refresh = RefreshToken.for_user(request.user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
-        response_data = {
-            'access_token': access_token,
-            'refresh_token': refresh_token,
-        }
+        if settings.PROD:
+            frontend_url = f"http://staging.storyvord.com/auth/sign-in?access_token={access_token}&refresh_token={refresh_token}"
+        else:
+            frontend_url = f"http://localhost:3000/auth/sign-in?access_token={access_token}&refresh_token={refresh_token}"
+        
+        return redirect(frontend_url)
 
-        return JsonResponse(response_data)
 
     return JsonResponse({'error': 'Authentication failed'}, status=401)
+
+    
