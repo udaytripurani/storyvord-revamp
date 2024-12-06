@@ -139,8 +139,9 @@ class FileListCreateView(APIView):
             folder = get_object_or_404(Folder, pk=pk)
 
             # Check if the user is in allowed_users or has permission to view the folder
-            if not folder.allowed_users.filter(user=request.user).exists():
-                raise PermissionError('You do not have permission to view the files in this folder.')
+            if not folder.default:
+                if not folder.allowed_users.filter(user=request.user).exists():
+                    raise PermissionError('You do not have permission to view the files in this folder.')
 
             files = folder.files
 
@@ -203,8 +204,9 @@ class FileDetailView(APIView):
             file = get_object_or_404(File, pk=pk)
 
             # Check if the user has view_folder permission
-            if not file.folder.allowed_users.filter(user=request.user).exists():
-                raise PermissionError('You do not have permission to view this file.')
+            if not file.folder.default:
+                if not file.folder.allowed_users.filter(user=request.user).exists():
+                    raise PermissionError('You do not have permission to view this file.')
 
             serializer = FileSerializer(file)
             data = {
