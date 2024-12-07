@@ -168,7 +168,7 @@ class ProjectAnnouncementViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectAnnouncementSerializer
 
     def get_queryset(self):
-        project_id = self.request.data.get("project") or self.request.query_params.get("project")
+        project_id = self.request.data.get("project_id") or self.request.query_params.get("project_id")
         if not project_id:
             return ProjectAnnouncement.objects.none()
             

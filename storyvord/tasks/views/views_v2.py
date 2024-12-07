@@ -23,7 +23,7 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
         if 'HTTP_AUTHORIZATION' not in request.META:
             logger.error("Authorization token missing")
             raise AuthenticationFailed("Authorization token is missing. Please provide a valid token.")
-    
+        
     # Create Task
     def create(self, request, *args, **kwargs):
         try:
@@ -63,7 +63,7 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    
     # List Tasks
     def list(self, request, *args, **kwargs):
         try:
@@ -76,11 +76,12 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
                     'tasks': [
                         {
                             'id': task.id,
+                            'project_id': task.project_id,
                             'title': task.title,
                             'description': task.description,
                             'assigned_to': [
                                 {
-                                    'id': membership.user.id,
+                                    'membership_id': membership.id,
                                     'email': membership.user.email,
                                 } for membership in task.assigned_to.all()
                             ],
@@ -101,26 +102,33 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         try:
             user = request.user
-            task = self.queryset.filter(assigned_to__user=user).get(pk=kwargs['pk'])
+            tasks = self.queryset.filter(project=kwargs['pk'])
+            if not tasks.exists():
+                return Response(status=status.HTTP_404_NOT_FOUND)
             data = {
                 'status': status.HTTP_200_OK,
-                'message': 'Task Fetched successfully',
-                'data': {
-                    'id': task.id,
-                    'title': task.title,
-                    'description': task.description,
-                    'assigned_to': [
-                        {
-                            'id': membership.user.id,
-                            'email': membership.user.email,
-                        } for membership in task.assigned_to.all()
-                    ],
-                    'due_date': task.due_date,
-                    'status': task.status,
-                    'is_completed': task.is_completed
-                }
+                'message': 'Tasks Fetched successfully',
+                'data': [
+                    {
+                        'id': task.id,
+                        'title': task.title,
+                        'description': task.description,
+                        'assigned_to': [
+                            {
+                                'membership_id': membership.id,
+                                'user_id': membership.user.id,
+                                'role': membership.role.name,
+                                'email': membership.user.email,
+                            } for membership in task.assigned_to.all()
+                        ],
+                        'due_date': task.due_date,
+                        'status': task.status,
+                        'is_completed': task.is_completed
+                    } for task in tasks
+                ]
             }
             return Response(data)
+            
         except Exception as exc:
             logger.error(f"Error retierving task: {exc}")
             response = custom_exception_handler(exc, self.get_renderer_context())

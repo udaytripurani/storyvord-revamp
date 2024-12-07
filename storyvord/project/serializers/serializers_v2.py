@@ -4,7 +4,7 @@ from ..models import (
     Role, Permission, Membership,
     ProjectCrewRequirement, ProjectEquipmentRequirement, ProjectAISuggestions
 )
-from accounts.models import Permission as AccountPermission
+from accounts.models import Permission as AccountPermission, User
 from rest_framework.exceptions import PermissionDenied
 
 # Permission Serializer
@@ -21,15 +21,22 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = ['name', 'permission', 'description', 'project', 'is_global']
 
+class UserSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='id')
+
+    class Meta:
+        model = User
+        fields = ['user_id', 'email']
 
 # Membership Serializer
 class MembershipSerializer(serializers.ModelSerializer):
     role = RoleSerializer()
-    user = serializers.StringRelatedField()  # Show the username or other identifier for the user
+    user = UserSerializer()  # Show the username or other identifier for the user
+    membership_id = serializers.IntegerField(source='id')
 
     class Meta:
         model = Membership
-        fields = ['id', 'user', 'role', 'project', 'created_at']
+        fields = ['membership_id', 'user', 'role', 'project', 'created_at']
         
         # Project Crew Requirement Serializer
 class ProjectCrewRequirementSerializer(serializers.ModelSerializer):

@@ -35,10 +35,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
         Only return projects where the user is either the owner or a member.
         Non-members should not be able to access any project details.
         """
-        return ProjectDetails.objects.filter(
-            Q(owner=self.request.user) | 
-            Q(memberships__user=self.request.user)
-        ).distinct()
+        try:
+            return ProjectDetails.objects.filter(
+                Q(owner=self.request.user) | 
+                Q(memberships__user=self.request.user)
+            ).order_by('-created_at').distinct()
+        except Exception as e:
+            logger.error(f"Error occurred while fetching projects for user {self.request.user}. Error: {e}")
+            raise e
 
     def get_object(self):
         """
