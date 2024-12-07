@@ -113,6 +113,18 @@ class FolderUpdateSerializer(serializers.ModelSerializer):
         if 'project' in data:
             raise serializers.ValidationError({"project": "You cannot change the project of a folder."})
 
+        # Check if the membership is valid
+        if 'allowed_users' in data:
+            for membership in data['allowed_users']:
+                if membership.project != folder.project:
+                    raise serializers.ValidationError({"allowed_users": "Invalid membership."})
+
+        # Check if user is added in allowed_users
+        if 'allowed_users' in data:
+            if user not in data['allowed_users']:
+                membership = get_object_or_404(Membership, user=user, project=folder.project)
+                data['allowed_users'].append(membership)
+                
 
         return data
     
