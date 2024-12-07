@@ -358,7 +358,7 @@ class FirstProjectView(APIView):
                 logger.info(f"Shooting details created: {shooting_details}")
 
             # Process crew requirements
-            for crew_item in data.get("crew_requirements", []):
+            for crew_item in data.get("project_requirement", {}).get("crew_requirements", []):
                 crew_obj, _ = ProjectCrewRequirement.objects.update_or_create(
                     project=project,
                     crew_title=crew_item.get("title"),

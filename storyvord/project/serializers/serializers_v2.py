@@ -30,6 +30,18 @@ class MembershipSerializer(serializers.ModelSerializer):
     class Meta:
         model = Membership
         fields = ['id', 'user', 'role', 'project', 'created_at']
+        
+        # Project Crew Requirement Serializer
+class ProjectCrewRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectCrewRequirement
+        fields = ['project','crew_title', 'quantity']
+
+# Project Equipment Requirement Serializer
+class ProjectEquipmentRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectEquipmentRequirement
+        fields = ['project','equipment_title', 'quantity']
 
 # Project Serializer
 class ProjectDetailsSerializer(serializers.ModelSerializer):
@@ -38,7 +50,7 @@ class ProjectDetailsSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ProjectDetails
-        fields = ['project_id', 'owner', 'members', 'name', 'content_type', 'brief', 'additional_details', 'created_at']
+        fields = ['project_id', 'owner', 'members', 'name', 'content_type', 'brief', 'additional_details', 'created_at', 'updated_at']
 
     def create(self, validated_data):
         user = self.context['request'].user
@@ -60,18 +72,6 @@ class ProjectDetailsSerializer(serializers.ModelSerializer):
         
         return project
 
-
-# Project Crew Requirement Serializer
-class ProjectCrewRequirementSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectCrewRequirement
-        fields = '__all__'
-
-# Project Equipment Requirement Serializer
-class ProjectEquipmentRequirementSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProjectEquipmentRequirement
-        fields = '__all__'
 
 # Project Requirements Serializer
 class ProjectRequirementsSerializer(serializers.ModelSerializer):
