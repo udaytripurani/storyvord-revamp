@@ -372,7 +372,7 @@ class FirstProjectView(APIView):
                 logger.info(f"Crew requirement created: {crew_obj}")
 
             # Process equipment requirements
-            for equipment_item in data.get("equipment_requirements", []):
+            for equipment_item in data.get("project_requirement", {}).get("equipment_requirements", []):
                 equipment_obj, _ = ProjectEquipmentRequirement.objects.update_or_create(
                     project=project,
                     equipment_title=equipment_item.get("title"),
@@ -418,7 +418,10 @@ class SuggestionView(APIView):
     
     def get(self, request):
         try:
-            project_id = request.data['project_id']
+            project_id = request.query_params.get('project_id')
+            if project_id is None:
+                return Response({'error': 'project_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            # project_id = request.data['project_id']
             project = get_object_or_404(ProjectDetails, project_id=project_id)
             logger.info(f"Project object type: {type(project)}, Value: {project}")
             
