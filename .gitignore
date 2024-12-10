@@ -152,3 +152,4 @@ Thumbs.db
 *.swp
 *.json
 */media
+*/staticfiles
