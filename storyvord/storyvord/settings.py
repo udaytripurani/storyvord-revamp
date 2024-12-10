@@ -326,10 +326,22 @@ SOCIALACCOUNT_LOGIN_ON_GET = True
 
 
 # Logging Configuration settings
-# Set up the log directory path
+# Set up the log directory path with date and time
 LOG_DIR = os.path.join(BASE_DIR, 'logs')
 if not os.path.exists(LOG_DIR):
     os.makedirs(LOG_DIR)
+
+# Create subdirectories for each log type
+APPLICATION_LOG_DIR = os.path.join(LOG_DIR, 'application')
+REQUEST_LOG_DIR = os.path.join(LOG_DIR, 'requests')
+ERROR_LOG_DIR = os.path.join(LOG_DIR, 'errors')
+DB_INFO_LOG_DIR = os.path.join(LOG_DIR, 'db_info')
+INFO_LOG_DIR = os.path.join(LOG_DIR, 'info')  # New directory for INFO logs
+
+for log_subdir in [APPLICATION_LOG_DIR, REQUEST_LOG_DIR, ERROR_LOG_DIR, DB_INFO_LOG_DIR, INFO_LOG_DIR]:
+    if not os.path.exists(log_subdir):
+        os.makedirs(log_subdir)
+
 # Logging Configuration
 LOGGING = {
     'version': 1,
@@ -353,7 +365,7 @@ LOGGING = {
         'application_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'application.log'),
+            'filename': os.path.join(APPLICATION_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
             'formatter': 'verbose',
             'filters': ['exclude_autoreload'],
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
@@ -362,7 +374,7 @@ LOGGING = {
         'request_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'requests.log'),
+            'filename': os.path.join(REQUEST_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -370,7 +382,7 @@ LOGGING = {
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'errors.log'),
+            'filename': os.path.join(ERROR_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -378,7 +390,15 @@ LOGGING = {
         'db_info_file': {  
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'db_info.log'), 
+            'filename': os.path.join(DB_INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'), 
+            'formatter': 'verbose',
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB
+            'backupCount': 5,
+        },
+        'info_file': {  # New handler for INFO logs
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -386,7 +406,7 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['application_file'],
+            'handlers': ['application_file', 'info_file'],  # Add info_file handler
             'level': 'DEBUG',
             'propagate': True,
         },
@@ -413,6 +433,11 @@ LOGGING = {
         'errors': {  # Logger for errors
             'handlers': ['error_file'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        'info': {  # Logger for INFO logs
+            'handlers': ['info_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
