@@ -6,8 +6,9 @@ from .views import (
     SendConnectionRequestView,
     ManageConnectionRequestView,
     ViewConnectionsView,
-    CheckConnectionRequestsView
-)
+    CheckConnectionRequestsView,
+     SuggestedProfilesView,
+    )
 
 urlpatterns = [
     path('check-email/', CheckEmailExistsView.as_view(), name='check_email_exists'),
@@ -15,4 +16,7 @@ urlpatterns = [
     path('connections/manage/', ManageConnectionRequestView.as_view(), name='manage_connection_request'),
     path('connections/', ViewConnectionsView.as_view(), name='view_connections'),
     path('connections/requests/', CheckConnectionRequestsView.as_view(), name='check_connection_requests'),  
+    
+    path('suggested-profiles/', SuggestedProfilesView.as_view(), name='suggested-profiles'),
+    
 ]
