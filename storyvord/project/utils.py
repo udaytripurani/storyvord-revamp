@@ -4,10 +4,11 @@ from typing import List
 from openai import OpenAI
 client = OpenAI()
 
-def project_ai_suggestion(project_id):
-    project = ProjectDetails.objects.get(project_id=project_id)
-    requirements = ProjectRequirements.objects.get(project=project)
-    shooting_details = ShootingDetails.objects.filter(project=project).values()
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+
+def project_ai_suggestion(project,requirements,shooting_details):
     
     class SuggestedData(BaseModel):
         compliance: List[str]
@@ -59,3 +60,78 @@ def structured_crew_output(parsed_response):
             }
         except Exception as e:
             raise ValueError(f"Error while parsing crew response: {str(e)}")
+            
+def generate_prompt(report_type, project_details, shooting_details):
+    prompts = {
+        "logistics": f"""
+        Given the following project details, generate a comprehensive logistics plan including transportation, accommodation, and any relevant recommendations:
+
+        Project Details:
+        {project_details}
+        Shooting Details:
+        {shooting_details}
+
+        Provide the report in markdown format with clear headers and bullet points.
+        """,
+        "budget": f"""
+        Create a detailed budget breakdown for the project described below. Include crew salaries, equipment rentals, transportation, accommodations, compliance, and miscellaneous expenses. Provide clear calculations and a final estimated total.
+
+        Project Details:
+        {project_details}
+        Shooting Details:
+        {shooting_details}
+
+        Respond in markdown format with appropriate sections.
+        """,
+        "compliance": f"""
+        Based on the project details provided, outline the compliance requirements for the given location. Include necessary permits, local authority contacts, risk considerations, and recommendations for navigating local regulations.
+
+        Project Details:
+        {project_details}
+        Shooting Details:
+        {shooting_details}
+
+        Provide the response in markdown format, organized into sections.
+        """,
+        "culture": f"""
+        Generate a detailed cultural considerations report for the specified shoot location. Focus on local customs, norms, and any cultural practices that could influence the production. Include recommendations for the crew to adapt and integrate effectively.
+
+        Project Details:
+        {project_details}
+        Shooting Details:
+        {shooting_details}
+
+        Respond in markdown format with clear sections.
+        """
+    }
+    return prompts.get(report_type, "Invalid report type.")
+
+@csrf_exempt
+def generate_report(report_type,project_details,shooting_details):
+    try:
+        # Generate the prompt
+        prompt = generate_prompt(report_type,project_details,shooting_details)
+
+        if prompt == "Invalid report type.":
+            return JsonResponse({"error": "Invalid report type."}, status=400)
+
+        completion = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": f"I need you to act as a line producer with expertise in local locations, compliance issues, and cultural nuances. You have a strong understanding of the risks involved in film production, especially related to location-specific factors."
+                    f"You are also skilled in budgeting for films, including compliance costs, and creating detailed itineraries to ensure compliance."
+                    f"Your knowledge covers locations worldwide, from big cities to small towns in every country."
+                    f"Given this expertise, provide advice using critical thinking based on further details I will provide"},
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+        
+        generated_text = completion.choices[0].message.content
+
+        return generated_text
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

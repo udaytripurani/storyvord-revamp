@@ -19,7 +19,7 @@ from ..serializers.serializers_v2 import (
 )
 import uuid
 from django.http import JsonResponse
-from project.utils import project_ai_suggestion
+from project.utils import generate_report, project_ai_suggestion
 
 import logging
 logger = logging.getLogger(__name__)
@@ -423,43 +423,65 @@ class SuggestionView(APIView):
                 return Response({'error': 'project_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
             # project_id = request.data['project_id']
             project = get_object_or_404(ProjectDetails, project_id=project_id)
+            requirements = ProjectRequirements.objects.get(project=project)
+            shooting_details = ShootingDetails.objects.filter(project=project).values()
+            project_details = project.brief
             logger.info(f"Project object type: {type(project)}, Value: {project}")
             
             if project.owner != request.user and not Membership.objects.filter(project=project, user=request.user).exists():
                 raise PermissionDenied("You do not have permission to view AI suggestions for this project.")
             
-            suggestion = project_ai_suggestion(project_id)
+            suggestion = project_ai_suggestion(project, requirements, shooting_details)
+            
+            logistics = "logistics"
+            logistics_report = generate_report(logistics,project_details,shooting_details)
+            
+            budget = "budget"
+            budget_report = generate_report(budget,project_details,shooting_details)
+            
+            compliance = "compliance"
+            compliance_report = generate_report(compliance,project_details,shooting_details)
+            
+            culture = "culture"
+            culture_report = generate_report(culture,project_details,shooting_details)
+            
             logger.info("Suggestion: ", suggestion)
             
-            data = suggestion.get('data', [])
-            for item in data:
-                shoot_item = ShootingDetails.objects.get(id=item['id'])
-                try:
-                    project_suggestion, created = ProjectAISuggestions.objects.get_or_create(
-                        project=project,
-                        shoot=shoot_item,
-                        defaults={
-                            'suggested_budget': item['ai_suggestion'][0].get('budget'),
-                            'suggested_compliance': item['ai_suggestion'][0].get('compliance'),
-                            'suggested_culture': item['ai_suggestion'][0].get('culture'),
-                            'suggested_logistics': item['ai_suggestion'][0].get('logistics')
-                        }
-                    )
-                    if not created:
-                        project_suggestion.suggested_budget = item['ai_suggestion'][0].get('budget')
-                        project_suggestion.suggested_compliance = item['ai_suggestion'][0].get('compliance')
-                        project_suggestion.suggested_culture = item['ai_suggestion'][0].get('culture')
-                        project_suggestion.suggested_logistics = item['ai_suggestion'][0].get('logistics')
-                        project_suggestion.save()
-                except Exception as e:
-                    logger.error(str(e))
+            # data = suggestion.get('data', [])
+            # for item in data:
+            #     # shoot_item = ShootingDetails.objects.get(id=item['id'])
+            #     try:
+            #         project_suggestion, created = ProjectAISuggestions.objects.get_or_create(
+            #             project=project,
+            #             # shoot=shoot_item,
+            #             defaults={
+            #                 'suggested_budget': item['ai_suggestion'][0].get('budget'),
+            #                 'suggested_compliance': item['ai_suggestion'][0].get('compliance'),
+            #                 'suggested_culture': item['ai_suggestion'][0].get('culture'),
+            #                 'suggested_logistics': item['ai_suggestion'][0].get('logistics')
+            #             }
+            #         )
+            #         if not created:
+            #             project_suggestion.suggested_budget = item['ai_suggestion'][0].get('budget')
+            #             project_suggestion.suggested_compliance = item['ai_suggestion'][0].get('compliance')
+            #             project_suggestion.suggested_culture = item['ai_suggestion'][0].get('culture')
+            #             project_suggestion.suggested_logistics = item['ai_suggestion'][0].get('logistics')
+            #             project_suggestion.save()
+            #     except Exception as e:
+            #         logger.error(str(e))
             
             return Response({
                     'success': True,
                     'message': 'Data',
                     'data': {
                         'project_id': project_id,
-                        'suggestion': suggestion
+                        'suggestion': suggestion,
+                        'report': {
+                            'logistics': logistics_report,
+                            'budget': budget_report,
+                            'compliance': compliance_report,
+                            'culture': culture_report
+                        }
                     }
                 }, status=status.HTTP_200_OK)
         except Exception as e:
