@@ -3,6 +3,7 @@ from django.db import models
 from accounts.models import User , PersonalInfo
 from django.conf import settings
 
+
 class ClientProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     personal_info = models.OneToOneField(PersonalInfo, on_delete=models.CASCADE, null=True, blank=True)
@@ -11,7 +12,6 @@ class ClientProfile(models.Model):
     personalWebsite = models.CharField(max_length=100, blank=True, null=True)
     drive = models.BooleanField(default=False)
     active = models.BooleanField(default=False)
-    employee_profile= models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='companies', blank=True)
 
     def __str__(self):
         return f'{self.user.email}'
@@ -263,28 +263,84 @@ COUNTRY_CHOICES = [
     ('ZW', 'Zimbabwe'),
 ]
 
+# Permission Model
+class Permission(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
+# Role Model
+class Role(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    permissions = models.ManyToManyField(Permission, related_name='roles', blank=True)
+    description = models.TextField(null=True, blank=True)
+    is_global = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+# Membership Model
+class Membership(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memberships')
+    role = models.ForeignKey('Role', on_delete=models.CASCADE, related_name='memberships')
+    company = models.ForeignKey('ClientCompanyProfile', on_delete=models.CASCADE, related_name='memberships')  # Links to the company
+    joined_at = models.DateTimeField(auto_now_add=True)  # Tracks when the membership was created
+    status = models.CharField(
+        max_length=20,
+        choices=[('Active', 'Active'), ('Inactive', 'Inactive')],
+        default='Active'
+    )
+
+    def __str__(self):
+        return f"{self.user.email} - {self.role.name} ({self.company.company_name})"
 
 class ClientCompanyProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     company_name = models.CharField(max_length=100, blank=True, null=True)
     company_logo = models.ImageField(upload_to='company/profile_images/', blank=True, null=True)
     street = models.CharField(max_length=256, blank=True, null=True)
-    cityandstate = models.CharField(max_length=256, blank=True, null=True)
-    postalcode = models.CharField(max_length=100, blank=True, null=True)
+    city_and_state = models.CharField(max_length=256, blank=True, null=True)
+    postal_code = models.CharField(max_length=100, blank=True, null=True)
     country = models.CharField(
         max_length=2,
         choices=COUNTRY_CHOICES,
         default='US',
     )
-    name = models.CharField(max_length=255, blank=True, null=True)
     email = models.EmailField(max_length=255, blank=True, null=True)
     phone = models.CharField(max_length=15, blank=True, null=True)
     fax = models.CharField(max_length=15, blank=True, null=True)
-    
-    def __str__(self):
-        return f'{self.user.email}'
+    employee_profile = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='companies', blank=True)
 
-        
+    def __str__(self):
+        return f'{self.company_name or self.user.email}'
+
+    def is_company_admin(self, user):
+        return self.user == user
+
+    def has_permission(self, user, permission_name):
+        print("Checking permission")
+        if self.is_company_admin(user):
+            return True
+        print("Checking membership")
+        membership = self.memberships.filter(user=user).first()
+        if membership:
+            return membership.role.permissions.filter(name=permission_name).exists()
+
+        print("No permission")
+        return False
+
+    def get_employees(self):
+        return self.memberships.filter(status='Active').select_related('user', 'role')
+
+
+
 class ClientCompanyFolder(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(null=True, blank=True)
@@ -296,6 +352,9 @@ class ClientCompanyFolder(models.Model):
     def __str__(self):
         return self.name
 
+    def has_permission(self, user, permission_name):
+        return self.company.has_permission(user, permission_name)
+
 class ClientCompanyFile(models.Model):
     name = models.CharField(max_length=255)
     file = models.FileField(upload_to='files/', null=True, blank=True)
@@ -303,6 +362,9 @@ class ClientCompanyFile(models.Model):
 
     def __str__(self):
         return self.file.name
+
+    def has_permission(self, user, permission_name):
+        return self.folder.has_permission(user, permission_name)
 
 class ClientCompanyCalendar(models.Model):
     company = models.OneToOneField(ClientCompanyProfile, on_delete=models.CASCADE, related_name='companyCalendar')

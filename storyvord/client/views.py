@@ -67,26 +67,29 @@ class OnboardAPIView(APIView):
     serializer_class = ProfileSerializer
 
     def get_object(self):
-        # Fetch profile based on logged-in user
-        profile = get_object_or_404(ClientProfile, user=self.request.user)  # Modified to fetch profile by user
+        profile = get_object_or_404(ClientProfile, user=self.request.user)
         return profile
 
     def put(self, request):
         try:
-            # Update profile based on logged-in user
             user = request.user
 
-            if user.user_type != 'client':
-                return Response({'status': False,
-                                 'error': 'User is not a client'}, status=status.HTTP_400_BAD_REQUEST)
+            if str(user.user_type) != 'client':
+                raise PermissionError('Only clients can onboard')
         
             if user.steps:
-                return Response({'status': False,
-                                 'error': 'User has already completed the onboarding process'}, status=status.HTTP_400_BAD_REQUEST)
+                raise PermissionError('User has already onboarded')
+
             profile = self.get_object()
             serializer = ProfileSerializer(profile, data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+                
             serializer.save()
+
+            user.steps = True
+            user.user_stage = 2
+            user.save()
             data = {
                 'message': 'Success',
                 'data': serializer.data
@@ -97,19 +100,15 @@ class OnboardAPIView(APIView):
             return response
 
 class ProfileDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # Apply IsAuthenticated permission globally
-
-    # parser_classes = [MultiPartParser]  # Enable MultiPartParser to handle file uploads
+    permission_classes = [IsAuthenticated]
     serializer_class = ProfileSerializer
 
     def get_object(self):
-        # Fetch profile based on logged-in user
-        profile = get_object_or_404(ClientProfile, user=self.request.user)  # Modified to fetch profile by user
+        profile = get_object_or_404(ClientProfile, user=self.request.user)
         return profile
 
     def get(self, request):
         try:
-            # Retrieve profile based on logged-in user
             profile = self.get_object()
             serializer = ProfileSerializer(profile)
             data = {
@@ -121,21 +120,12 @@ class ProfileDetailAPIView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-    # def put(self, request):
-    #     # Update profile based on logged-in user
-    #     profile = self.get_object()
-    #     serializer = ProfileSerializer(profile, data=request.data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     def put(self, request):
         try:
-            # Update profile based on logged-in user
             profile = self.get_object()
             serializer = ProfileSerializer(profile, data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             serializer.save()
             data = {
                 'message': 'Success',
@@ -145,53 +135,23 @@ class ProfileDetailAPIView(APIView):
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
-    
 
-    
-
-    # Other methods (get, delete) remain unchanged
-
-    # def put(self, request):
-    #     try:
-    #         profile = ClientProfile.objects.get(user=request.user)
-    #     except ClientProfile.DoesNotExist:
-    #         return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    #     serializer = ProfileSerializer(profile, data=request.data)
-    #     if serializer.is_valid():
-    #         # Handle image upload/update
-    #         # if 'image' in request.data:
-    #         #     # Delete previous image if updating
-    #         #     if profile.image:
-    #         #         profile.image.delete()
-
-    #         #     # Save new image and update URL
-    #         #     image = request.data.get('image')
-    #         #     profile.image = image
-    #         #     profile.image = f'https://storage.googleapis.com/storyvord-profile/{profile.image.name}'  # Update the image URL
-
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request):
-        try:
-            # Delete profile based on logged-in user
-            profile = self.get_object()
-            profile.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Exception as exc:
-            response = custom_exception_handler(exc, self.get_renderer_context())
-            return response
-
-        
 class ClientCompanyProfileAPIView(APIView):
     permissions_classes = [IsAuthenticated]
     serializer_class = ClientCompanyProfileSerializer
 
     def get(self, request):
         try:
-            profile = ClientCompanyProfile.objects.get(user=request.user)
+            pk = request.query_params.get('pk', None)
+            if pk:
+                profile = get_object_or_404(ClientCompanyProfile, pk=pk)
+            else:
+                profile = get_object_or_404(ClientCompanyProfile, user=request.user)
+
+            if not profile.has_permission(request.user, 'edit'):
+                raise PermissionError('You do not have permission to view this profile')
+        
+            
             serializer = ClientCompanyProfileSerializer(profile)
             data = {
                 'message': 'Success',
@@ -202,12 +162,16 @@ class ClientCompanyProfileAPIView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-    def put(self, request):
+    def put(self, request, pk=None):
         try:
-            profile = ClientCompanyProfile.objects.get(user=request.user)
+            if pk:
+                profile = get_object_or_404(ClientCompanyProfile, pk=pk)
+            else:
+                profile = ClientCompanyProfile.objects.get(user=request.user)
 
             serializer = ClientCompanyProfileSerializer(profile, data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             serializer.save()
             data = {
                 'message': 'Success',
@@ -217,6 +181,30 @@ class ClientCompanyProfileAPIView(APIView):
         except Exception as exc:
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
+
+# List all employees in a company
+class EmployeeListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MembershipSerializer
+
+    def get(self, request, pk):
+        try:
+            # pk = request.query_params.get('pk', None)
+            # if not pk:
+                # raise serializers.ValidationError('Company ID is required as a query parameter "pk"')
+
+            company = get_object_or_404(ClientCompanyProfile, pk=pk)
+            memberships = Membership.objects.filter(company=company)
+            serializer = MembershipSerializer(memberships, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
 
 
 class SwitchProfileView(APIView):
@@ -274,6 +262,9 @@ class ClientCompanyFolderView(APIView):
         try:
             user = request.user
             folders = ClientCompanyFolder.objects.filter(allowed_users=user).distinct()
+
+            folders.has
+            
             serializer = ClientCompanyFolderSerializer(folders, many=True)
             data = {
                 'message': 'Success',
@@ -499,7 +490,7 @@ class ClientCompanyEventAPIView(APIView):
 
     def get(self, request, event_id=None):
         try:
-            if event_id:
+            if (event_id):
                 event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
                 serializer = ClientCompanyEventSerializer(event)
 

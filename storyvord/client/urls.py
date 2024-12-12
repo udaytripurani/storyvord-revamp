@@ -11,6 +11,9 @@ urlpatterns = [
 
     # Company Profile
     path('company-profile/', ClientCompanyProfileAPIView.as_view(), name='client_company_profile'),
+    path('company-profile/<int:pk>/', ClientCompanyProfileAPIView.as_view(), name='client_company_profile_update'),
+    path('company-profile/employees/<int:pk>/', EmployeeListAPIView.as_view(), name='employee-list'),
+    
 
     # Company Folder and File
     path('folders/', ClientCompanyFolderView.as_view(), name='client_company_folder_list_create'),

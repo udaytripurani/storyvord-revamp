@@ -11,6 +11,8 @@ class CallSheet(models.Model):
     nearest_hospital_address = models.CharField(max_length=255, blank=True)
     nearest_police_station = models.CharField(max_length=255, blank=True)
     nearest_fire_station = models.CharField(max_length=255, blank=True)
+    additional_notes = models.TextField(blank=True, null=True)
+    production_notes = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.title
