@@ -16,8 +16,8 @@ urlpatterns = [
     
 
     # Company Folder and File
-    path('folders/', ClientCompanyFolderView.as_view(), name='client_company_folder_list_create'),
-    path('folders/<int:pk>/', ClientCompanyFolderUpdateView.as_view(), name='client-company-folder-update'),
+    path('folders/<int:company_id>/', ClientCompanyFolderView.as_view(), name='client_company_folder_list_create'),
+    path('folders/details/<int:pk>/', ClientCompanyFolderUpdateView.as_view(), name='client-company-folder-update'),
     path('folders/<int:folder_id>/files/', ClientCompanyFileView.as_view(), name='client_company_file_list_create'),
     path('folders/files/<int:pk>/', ClientCompanyFileUpdateView.as_view(), name='client-company-file-update'),
     

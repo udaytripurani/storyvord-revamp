@@ -258,12 +258,15 @@ class ClientCompanyFolderView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ClientCompanyFolderSerializer
 
-    def get(self, request, format=None):
+    def get(self, request, company_id):
         try:
             user = request.user
-            folders = ClientCompanyFolder.objects.filter(allowed_users=user).distinct()
+            company = get_object_or_404(ClientCompanyProfile, pk=company_id)
 
-            folders.has
+            if company.has_permission(user, 'view_folder'):
+                folders = ClientCompanyFolder.objects.filter(company=company)
+            else:
+                folders = ClientCompanyFolder.objects.filter(company=company, allowed_users=user)
             
             serializer = ClientCompanyFolderSerializer(folders, many=True)
             data = {
@@ -275,10 +278,25 @@ class ClientCompanyFolderView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-    def post(self, request, format=None):
+    def post(self, request, company_id):
         try:
-            serializer = ClientCompanyFolderSerializer(data=request.data, context={'request': request})
-            serializer.is_valid(exception=True)
+            company = get_object_or_404(ClientCompanyProfile, pk=company_id)
+            if not company.has_permission(request.user, 'create_folder'):
+                raise PermissionError('You do not have permission to create folders for this company')
+
+            data = request.data.copy()
+            data['company'] = company_id
+
+            for user in data.get('allowed_users', []):
+                print(user)
+                if not company.memberships.filter(user=user).exists(): 
+                    raise PermissionError(f'User {user} does not have permission to view folders for this company')
+            
+            serializer = ClientCompanyFolderSerializer(data=data, context={'request': request})
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
             serializer.save(created_by=request.user)
             data = {
                 'message': 'Success',
@@ -297,7 +315,11 @@ class ClientCompanyFileView(APIView):
 
     def get(self, request, folder_id, format=None):
         try:
-            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id, allowed_users=request.user)
+            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id)
+
+            if not folder.company.has_permission(request.user, 'view_folder') or not folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
+            
             files = folder.files.all()
             serializer = ClientCompanyFileSerializer(files, many=True)
             data = {
@@ -311,11 +333,18 @@ class ClientCompanyFileView(APIView):
 
     def post(self, request, folder_id, format=None):
         try:
-            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id, allowed_users=request.user)
+            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id)
+
+            if not folder.company.has_permission(request.user, 'create_folder'):
+                raise PermissionError('You do not have permission to create files to this folder')
+            
             req_data = request.data.copy()
             req_data['folder'] = folder.id
             serializer = ClientCompanyFileSerializer(data=req_data)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -340,8 +369,12 @@ class ClientCompanyFileUpdateView(APIView):
     def get(self, request, pk, format=None):
         try:
             file = self.get_object(pk)
-            if file is None:
-                return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            if not file:
+                raise serializers.ValidationError('File not found.')
+
+            if not file.folder.company.has_permission(request.user, 'view_folder') or not file.folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
 
             serializer = ClientCompanyFileUpdateSerializer(file, context={'request': request})
             data = {
@@ -356,29 +389,19 @@ class ClientCompanyFileUpdateView(APIView):
     def put(self, request, pk, format=None):
         try:
             file = self.get_object(pk)
+
             if file is None:
-                return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+                raise serializers.ValidationError('File not found.')
+
+
+            if not file.folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit files to this folder')
 
             serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, context={'request': request})
-            serializer.is_valid(exception=True)
-            serializer.save()
-            data = {
-                'message': 'Success',
-                'data': serializer.data
-            }
-            return Response(data)
-        except Exception as exc:
-            response = custom_exception_handler(exc, self.get_renderer_context())
-            return response
 
-    def patch(self, request, pk, format=None):
-        try:
-            file = self.get_object(pk)
-            if file is None:
-                return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-            serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, partial=True, context={'request': request})
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -393,12 +416,11 @@ class ClientCompanyFileUpdateView(APIView):
         try:
             file = self.get_object(pk)
             if file is None:
-                return Response({'status': False,
-                                'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+                raise serializers.ValidationError('File not found.')
 
-            if file.folder.created_by != request.user:
-                return Response({'status': False,
-                                'detail': 'You do not have permission to delete this file.'}, status=status.HTTP_403_FORBIDDEN)
+            if not file.folder.company.has_permission(request.user, 'delete_folder'):
+                raise PermissionError('You do not have permission to delete files to this folder')
+
 
             file.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
@@ -418,10 +440,14 @@ class ClientCompanyFolderUpdateView(APIView):
 
     def get(self, request, pk, format=None):
         try:
+            print("Get folder")
             folder = self.get_object(pk)
+
             if folder is None:
-                return Response({'status': False,
-                                'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+                raise serializers.ValidationError('Folder not found.')
+
+            if not folder.company.has_permission(request.user, 'view_folder') or not folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
 
             serializer = ClientCompanyFolderUpdateSerializer(folder)
 
@@ -437,12 +463,18 @@ class ClientCompanyFolderUpdateView(APIView):
     def put(self, request, pk, format=None):
         try:
             folder = self.get_object(pk)
+
             if folder is None:
-                return Response({'status': False,
-                                 'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+                raise serializers.ValidationError('Folder not found.')
+            
+            if not folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit this folder')
 
             serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, context={'request': request})
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             self.check_object_permissions(request, folder)
             serializer.save()
 
@@ -458,13 +490,18 @@ class ClientCompanyFolderUpdateView(APIView):
     def patch(self, request, pk, format=None):
         try:
             folder = self.get_object(pk)
+
             if folder is None:
-                return Response({'status': False,
-                                 'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+                raise serializers.ValidationError('Folder not found.')
+
+            if not folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit this folder')
 
             serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, partial=True, context={'request': request})
-            serializer.is_valid(exception=True)
-            self.check_object_permissions(request, folder)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
 
             data = {
@@ -476,11 +513,22 @@ class ClientCompanyFolderUpdateView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-    def check_object_permissions(self, request, obj):
-        # Custom permission check
-        if obj.created_by != request.user:
-            self.permission_denied(request, message="You do not have permission to edit this folder.")
-            
+    def delete(self, request, pk, format=None):
+        try:
+            folder = self.get_object(pk)
+
+            if folder is None:
+                raise serializers.ValidationError('Folder not found.')
+
+            if not folder.company.has_permission(request.user, 'delete_folder'):
+                raise PermissionError('You do not have permission to delete this folder')
+
+            folder.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
 # Calendar
 
 

@@ -110,8 +110,8 @@ class ClientCompanyFileUpdateSerializer(serializers.ModelSerializer):
 class ClientCompanyFolderUpdateSerializer(serializers.ModelSerializer):
     files = ClientCompanyFileSerializer(many=True, required=False)
     allowed_users = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
-    add_users = serializers.ListField(child=serializers.EmailField(), write_only=True, required=False)
-    remove_users = serializers.ListField(child=serializers.EmailField(), write_only=True, required=False)
+    add_users = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
+    remove_users = serializers.ListField(child=serializers.IntegerField(), write_only=True, required=False)
     created_by = serializers.ReadOnlyField(source='created_by.id')
 
     class Meta:
@@ -134,19 +134,19 @@ class ClientCompanyFolderUpdateSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
-        add_users_emails = validated_data.pop('add_users', [])
-        remove_users_emails = validated_data.pop('remove_users', [])
+        add_users_ids = validated_data.pop('add_users', [])
+        remove_users_ids = validated_data.pop('remove_users', [])
 
-        for user_email in add_users_emails:
-            user = get_object_or_404(User, email=user_email)
-            if user not in instance.company.crew_profiles.all():
-                raise serializers.ValidationError({"add_users": f"User {user_email} is not part of the company crew."})
-            instance.allowed_users.add(user)
+        company = instance.company
 
-        for user_email in remove_users_emails:
-            user = get_object_or_404(User, email=user_email)
-            instance.allowed_users.remove(user)
+        for user_id in add_users_ids:
+            if not company.memberships.filter(user=user_id).exists(): 
+                    raise PermissionError(f'User {user_id} does not have permission to view folders for this company')
+            instance.allowed_users.add(user_id)
 
+        for user_id in remove_users_ids:
+            instance.allowed_users.remove(user_id)
+        
         if self.context['request'].user not in instance.allowed_users.all():
             instance.allowed_users.add(self.context['request'].user)
 

@@ -325,15 +325,11 @@ class ClientCompanyProfile(models.Model):
         return self.user == user
 
     def has_permission(self, user, permission_name):
-        print("Checking permission")
         if self.is_company_admin(user):
             return True
-        print("Checking membership")
         membership = self.memberships.filter(user=user).first()
         if membership:
             return membership.role.permissions.filter(name=permission_name).exists()
-
-        print("No permission")
         return False
 
     def get_employees(self):
