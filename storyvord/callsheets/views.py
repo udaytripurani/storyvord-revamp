@@ -10,6 +10,7 @@ from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
 from storyvord.exception_handlers import custom_exception_handler
 from project.models import Membership, ProjectDetails   
+from rest_framework import serializers
 
 class CallSheetListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -39,8 +40,8 @@ class CallSheetListAPIView(APIView):
         try:
             project = get_object_or_404(ProjectDetails, pk=project_id)
 
-            if not self.check_rbac(request.user, project, 'create_callsheet'):
-                raise PermissionError('You do not have permission to create callsheet for this project')
+            # if not self.check_rbac(request.user, project, 'create_callsheet'):
+                # raise PermissionError('You do not have permission to create callsheet for this project')
             
             data = request.data.copy()
             data['project'] = project.project_id
@@ -49,7 +50,7 @@ class CallSheetListAPIView(APIView):
 
 
             if not serializer.is_valid():
-                raise serializer.ValidationError(serializer.errors)
+                raise serializers.ValidationError(serializer.errors)
             
             serializer.save()
             data = {
