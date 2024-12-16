@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from ..models import (
-    ProjectDetails, ProjectRequirements, ShootingDetails, 
+    ProjectDetails, ProjectInvite, ProjectRequirements, ShootingDetails, 
     Role, Permission, Membership,
     ProjectCrewRequirement, ProjectEquipmentRequirement, ProjectAISuggestions
 )
@@ -113,4 +113,9 @@ class ShootingDetailsSerializer(serializers.ModelSerializer):
 class ProjectAISuggestionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectAISuggestions
+        fields = '__all__'
+        
+class ProjectInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectInvite
         fields = '__all__'

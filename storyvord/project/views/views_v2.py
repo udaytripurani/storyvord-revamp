@@ -1,3 +1,4 @@
+from django.forms import model_to_dict
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
@@ -9,12 +10,12 @@ from rest_framework.exceptions import ValidationError, PermissionDenied, NotFoun
 from django.db.models import Q
 from accounts.models import Permission as AccountPermission
 from ..models import (
-    ProjectDetails, ProjectRequirements, ShootingDetails, 
+    ProjectDetails, ProjectRequirements, ShootingDetails, ProjectInvite,
     Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,ProjectAISuggestions
 )
 from decimal import Decimal , InvalidOperation
 from ..serializers.serializers_v2 import (
-    ProjectDetailsSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
+    ProjectDetailsSerializer, ProjectInviteSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
     RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer
 )
 import uuid
@@ -59,13 +60,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def create_role(self, request, pk=None):
         project = self.get_object()
         data = request.data
-        data['project'] = project.id  # Assign the project to the role
+        data['project'] = project.project_id  # Assign the project to the role
         role_serializer = RoleSerializer(data=data)
         if role_serializer.is_valid():
             role_serializer.save()
-            logger.info(f"User {self.request.user.id} created role {role_serializer.data['name']} in project {project.id}")
+            logger.info(f"User {self.request.user.id} created role {role_serializer.data['name']} in project {project.project_id}")
             return Response(role_serializer.data, status=status.HTTP_201_CREATED)
-        logger.warning(f"User {self.request.user.id} tried to create role in project {project.id} with invalid data")
+        logger.warning(f"User {self.request.user.id} tried to create role in project {project.project_id} with invalid data")
         return Response(role_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # Action to manage adding/removing members from a project
@@ -91,30 +92,93 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 user=request.user,
                 role__permission__name='add_members'
             ).exists():
-                print(f"User is either the owner of the project or has the 'add_members' permission")
-                membership = Membership.objects.create(user_id=user, role_id=role, project=project)
-                membership.save()
-                logger.info(f"User {self.request.user.id} successfully added member {user} to project {project}")
-                return Response({'message': 'Member added successfully'}, status=status.HTTP_201_CREATED)
+                invitee = get_object_or_404(User, id=user)
+                role = get_object_or_404(Role, id=role)
+                
+                invite, created = ProjectInvite.objects.get_or_create(
+                    project=project,
+                    inviter=request.user,
+                    invitee=invitee,
+                    role=role,
+                )
+                if created:
+                    logger.info(f"User {request.user.id} successfully invited member {user} to project {project}")
+                    return Response(
+                        {
+                            'message': 'Invitation sent successfully',
+                            'data': model_to_dict(invite)
+                        }, status=status.HTTP_201_CREATED)
+                else:
+                    logger.info(f"User {request.user.id} tried to re-invite member {user} to project {project} who already has a pending invite")
+                    return Response(
+                        {
+                            'message': 'Invitation already exists',
+                            'data': {
+                                'invite_id': invite.id,
+                                'inviter': invite.inviter.id,
+                                'invitee': invite.invitee.id,
+                                'role': invite.role.id
+                                }
+                        }, status=status.HTTP_200_OK)
+                
             else:
                 logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project} which they do not have permission for")
                 raise PermissionDenied("You don't have permission to add members to this project.")
             
         except ProjectDetails.DoesNotExist:
-            # Return a 404 error if the project doesn't exist or the user has no access
-            logger.warning(f"User {self.request.user.id} tried to access project {self.kwargs.get('pk')} which does not exist or they have no access")
+            logger.warning(f"User {request.user.id} tried to access project {pk} which does not exist or they have no access")
             return Response({'error': 'Project does not exist or you do not have access to it.'}, status=status.HTTP_404_NOT_FOUND)
 
         except PermissionDenied as e:
-            # Catch and return permission-related errors
-            logger.warning(f"User {self.request.user.id} tried to add member to project {project} without permission")
-            return Response({'Permission error': str(e)}, status=status.HTTP_403_FORBIDDEN)
+            logger.warning(f"User {request.user.id} tried to invite member to project {project} without permission")
+            return Response({'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
 
         except Exception as e:
-            # General error handling
-            logger.error(f"User {self.request.user.id} tried to add member to project {project} with an unexpected error")
-            return Response({'Exception error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
+            logger.error(f"Unexpected error occurred while {request.user.id} tried to invite member to project {project}. Error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class RespondToInviteView(APIView):
+    """
+    Handle user responses to project invitations.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, invite_id):
+        try:
+            # Retrieve the invite, ensuring the invitee is the requesting user
+            try:
+                invite = ProjectInvite.objects.get(id=invite_id, invitee=request.user)
+            except ProjectInvite.DoesNotExist:
+                return Response({'error': 'Invitation not found or you do not have permission to respond.'}, status=404)
+
+            # Validate the action
+            action = request.data.get('action')  # "accept" or "reject"
+            if action not in ['accept', 'reject']:
+                raise ValidationError({'error': 'Invalid action. Must be "accept" or "reject".'})
+
+            # Process the action
+            if action == 'accept':
+                invite.accept()
+                return Response({'message': 'Invite accepted'}, status=200)
+            elif action == 'reject':
+                invite.reject()
+                return Response({'message': 'Invite rejected'}, status=200)
+        
+        except Exception as e:
+            logger.error(f"Unexpected error occurred while {request.user.id} tried to respond to invite {invite_id}. Error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+class GetInvitesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            invites = ProjectInvite.objects.filter(invitee=request.user)
+            serializer = ProjectInviteSerializer(invites, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Unexpected error occurred while {request.user.id} tried to get invites. Error: {e}")
+
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
     queryset = ProjectRequirements.objects.all()
@@ -125,11 +189,6 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
         return ProjectRequirements.objects.filter(
             project=self.request.query_params.get('project_id')
         )
-
-    # def get_object(self):
-    #     project = ProjectRequirements.objects.filter(project=self.kwargs['pk'])
-    #     print(project)
-    #     return project
 
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -184,22 +243,25 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
+        instance = ProjectRequirements.objects.get(pk=kwargs['pk'])
         validated_data = request.data
         user = request.user
 
         # Check permissions
         project = get_object_or_404(ProjectDetails, project_id=validated_data.get("project"))
         if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
-            logger.warning(f"User {user.id} tried to update requirements for project {project.id} without permission")
+            logger.warning(f"User {user.id} tried to update requirements for project {project.project_id} without permission")
             raise PermissionDenied("You do not have permission to update requirements for this project.")
 
         # Update main ProjectRequirements fields
-        instance.budget_currency = validated_data.get("budget_currency", instance.budget_currency)
-        instance.budget = validated_data.get("budget", instance.budget)
-        instance.updated_by = user
-        instance.save()
-        logger.info(f"Project requirements updated for project {project.id} by user {user.id}")
+        try:
+            instance.budget_currency = validated_data.get("budget_currency", instance.budget_currency)
+            instance.budget = validated_data.get("budget", instance.budget)
+            instance.updated_by = user
+            instance.save()
+            logger.info(f"Project requirements updated for project {project.project_id} by user {user.id}")
+        except Exception as e:
+            logger.error(f"Error updating project requirements for project {project.project_id} by user {user.id}: {str(e)}")
 
         # Update or create crew requirements
         crew_data = validated_data.get("crew_requirements", [])
@@ -211,7 +273,7 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
                 defaults={"quantity": crew_item.get("quantity", 1)}
             )
             instance.crew_requirements.add(crew_obj)
-            logger.info(f"Crew requirement updated: {crew_item.get('title')} for project {project.id}")
+            logger.info(f"Crew requirement updated: {crew_item.get('title')} for project {project.project_id}")
 
         # Update or create equipment requirements
         equipment_data = validated_data.get("equipment_requirements", [])
@@ -223,7 +285,7 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
                 defaults={"quantity": equipment_item.get("quantity", 1)}
             )
             instance.equipment_requirements.add(equipment_obj)
-            logger.info(f"Equipment requirement updated: {equipment_item.get('title')} for project {project.id}")
+            logger.info(f"Equipment requirement updated: {equipment_item.get('title')} for project {project.project_id}")
 
         # Serialize and return the updated instance
         serializer = self.get_serializer(instance)
@@ -281,7 +343,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         if 'project' in data:
             project_id = data['project']
             project = ProjectDetails.objects.get(id=project_id)
-            data['project'] = project.id
+            data['project'] = project.project_id
         return super().create(request, *args, **kwargs)
 
 
@@ -415,77 +477,97 @@ class SkipOnboardView(APIView):
 
 class SuggestionView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
+    def get_project(self, project_id, user):
+        """
+        Retrieve the project and validate user access.
+        """
+        project = get_object_or_404(ProjectDetails, project_id=project_id)
+
+        if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
+            raise PermissionDenied("You do not have permission to view AI suggestions for this project.")
+
+        return project
+
+    def regenerate_report(self, project, project_details, shooting_details, regenerate=None):
+        """
+        Generate or regenerate specific reports based on the regenerate parameter.
+        """
+        reports = {}
+        if not regenerate or "logistics" in regenerate:
+            reports["logistics"] = generate_report("logistics", project_details, shooting_details)
+        if not regenerate or "budget" in regenerate:
+            reports["budget"] = generate_report("budget", project_details, shooting_details)
+        if not regenerate or "compliance" in regenerate:
+            reports["compliance"] = generate_report("compliance", project_details, shooting_details)
+        if not regenerate or "culture" in regenerate:
+            reports["culture"] = generate_report("culture", project_details, shooting_details)
+
+        # Update or create AI suggestions in the database
+        ProjectAISuggestions.objects.update_or_create(
+            project=project,
+            defaults={
+                'suggested_logistics': reports.get("logistics", ""),
+                'suggested_budget': reports.get("budget", ""),
+                'suggested_compliance': reports.get("compliance", ""),
+                'suggested_culture': reports.get("culture", "")
+            }
+        )
+        return reports
+
     def get(self, request):
         try:
             project_id = request.query_params.get('project_id')
-            if project_id is None:
-                return Response({'error': 'project_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
-            # project_id = request.data['project_id']
-            project = get_object_or_404(ProjectDetails, project_id=project_id)
+            regenerate = request.query_params.getlist('regenerate')
+
+            if not project_id:
+                return Response({'error': 'project_id is required.'}, status=400)
+
+            project = self.get_project(project_id, request.user)
+
+            # Fetch related data
             requirements = ProjectRequirements.objects.get(project=project)
             shooting_details = ShootingDetails.objects.filter(project=project).values()
             project_details = project.brief
-            logger.info(f"Project object type: {type(project)}, Value: {project}")
-            
-            if project.owner != request.user and not Membership.objects.filter(project=project, user=request.user).exists():
-                raise PermissionDenied("You do not have permission to view AI suggestions for this project.")
-            
-            suggestion = project_ai_suggestion(project, requirements, shooting_details)
-            
-            logistics = "logistics"
-            logistics_report = generate_report(logistics,project_details,shooting_details)
-            
-            budget = "budget"
-            budget_report = generate_report(budget,project_details,shooting_details)
-            
-            compliance = "compliance"
-            compliance_report = generate_report(compliance,project_details,shooting_details)
-            
-            culture = "culture"
-            culture_report = generate_report(culture,project_details,shooting_details)
-            
-            logger.info("Suggestion: ", suggestion)
-            
-            # data = suggestion.get('data', [])
-            # for item in data:
-            #     # shoot_item = ShootingDetails.objects.get(id=item['id'])
-            #     try:
-            #         project_suggestion, created = ProjectAISuggestions.objects.get_or_create(
-            #             project=project,
-            #             # shoot=shoot_item,
-            #             defaults={
-            #                 'suggested_budget': item['ai_suggestion'][0].get('budget'),
-            #                 'suggested_compliance': item['ai_suggestion'][0].get('compliance'),
-            #                 'suggested_culture': item['ai_suggestion'][0].get('culture'),
-            #                 'suggested_logistics': item['ai_suggestion'][0].get('logistics')
-            #             }
-            #         )
-            #         if not created:
-            #             project_suggestion.suggested_budget = item['ai_suggestion'][0].get('budget')
-            #             project_suggestion.suggested_compliance = item['ai_suggestion'][0].get('compliance')
-            #             project_suggestion.suggested_culture = item['ai_suggestion'][0].get('culture')
-            #             project_suggestion.suggested_logistics = item['ai_suggestion'][0].get('logistics')
-            #             project_suggestion.save()
-            #     except Exception as e:
-            #         logger.error(str(e))
-            
-            return Response({
-                    'success': True,
-                    'message': 'Data',
-                    'data': {
-                        'project_id': project_id,
-                        'suggestion': suggestion,
-                        'report': {
-                            'logistics': logistics_report,
-                            'budget': budget_report,
-                            'compliance': compliance_report,
-                            'culture': culture_report
-                        }
-                    }
-                }, status=status.HTTP_200_OK)
-        except Exception as e:
-            logger.error(str(e))
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
 
+            # Fetch cached suggestions if no regeneration is requested
+            if not regenerate:
+                cached_suggestions = ProjectAISuggestions.objects.filter(project=project).first()
+                if cached_suggestions:
+                    serialized_suggestions = {
+                        'logistics': cached_suggestions.suggested_logistics,
+                        'budget': cached_suggestions.suggested_budget,
+                        'compliance': cached_suggestions.suggested_compliance,
+                        'culture': cached_suggestions.suggested_culture,
+                    }
+                    return Response({
+                        'success': True,
+                        'message': 'Cached data retrieved.',
+                        'data': {
+                            'project_id': project_id,
+                            'suggestion': "Suggestions already available in the database.",
+                            'report': serialized_suggestions
+                        }
+                    }, status=200)
+
+            # Generate AI suggestion
+            ai_suggestion = project_ai_suggestion(project, requirements, shooting_details)
+
+            # Regenerate specific reports or all reports
+            reports = self.regenerate_report(project, project_details, shooting_details, regenerate)
+
+            return Response({
+                'success': True,
+                'message': 'Data generated successfully.',
+                'data': {
+                    'project_id': project_id,
+                    'suggestion': ai_suggestion,
+                    'report': reports
+                }
+            }, status=200)
+
+        except ProjectRequirements.DoesNotExist:
+            return Response({'error': 'Project requirements not found.'}, status=404)
+        except Exception as e:
+            logger.error(f"Error in SuggestionView: {str(e)}")
+            return Response({'error': str(e)}, status=500)

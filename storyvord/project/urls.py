@@ -32,4 +32,6 @@ urlpatterns += [
     path('v2/firstproject/', FirstProjectView.as_view(), name='firstproject'),
     path('v2/skiponboard/', SkipOnboardView.as_view(), name='skiponboard'),
     path('v2/ai_suggestion/', SuggestionView.as_view(), name='suggestion'),
+    path('v2/invites/<uuid:invite_id>/respond/', RespondToInviteView.as_view(), name='respond_to_invite'),
+    path('v2/get_invites/', GetInvitesView.as_view(), name='get_invites'),
 ]

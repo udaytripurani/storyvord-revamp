@@ -142,7 +142,7 @@ class Membership(models.Model):
     
     def __str__(self):
         return f"{self.user.email} - {self.role.name}"
-
+    
 class ProjectDetails(models.Model):
     project_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -151,6 +151,7 @@ class ProjectDetails(models.Model):
     content_type = models.CharField(max_length=256)
     brief = models.TextField()
     additional_details = models.TextField()
+    status = models.CharField(max_length=30, choices=StatusChoices.choices, default=StatusChoices.PLANNING)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -160,6 +161,42 @@ class ProjectDetails(models.Model):
     class Meta:
         ordering = ['project_id']
         
+class ProjectInvite(models.Model):
+    INVITE_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE, related_name='invites')
+    inviter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_invites')  # Project admin
+    invitee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_invites')  # User being invited
+    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)  # Optional role in the project
+    status = models.CharField(max_length=10, choices=INVITE_STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('project', 'invitee')
+
+    def accept(self):
+        """Accept the invite and add the user to the project."""
+        if self.status == 'PENDING':
+            default_role = Role.objects.filter(name='member').first()
+            Membership.objects.create(user=self.invitee, role=self.role or default_role, project=self.project)
+            self.status = 'ACCEPTED'
+            self.save()
+
+    def reject(self):
+        """Reject the invite."""
+        if self.status == 'PENDING':
+            self.status = 'REJECTED'
+            self.save()
+
+    def __str__(self):
+        return f"Invite to {self.invitee.email} for {self.project.name}"
+    
 class ProjectCrewRequirement(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     crew_title = models.CharField(max_length=256, null=True, blank=True)
@@ -203,7 +240,7 @@ class ShootingDetails(models.Model):
     
 class ProjectAISuggestions(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
-    shoot = models.ForeignKey(ShootingDetails, on_delete=models.CASCADE)
+    shoot = models.ForeignKey(ShootingDetails, on_delete=models.CASCADE, null=True, blank=True)
     suggested_budget =  models.TextField(null=True, blank=True)
     suggested_compliance = models.TextField(null=True, blank=True)
     suggested_culture = models.TextField(null=True, blank=True)

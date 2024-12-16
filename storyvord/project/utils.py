@@ -60,11 +60,12 @@ def structured_crew_output(parsed_response):
             }
         except Exception as e:
             raise ValueError(f"Error while parsing crew response: {str(e)}")
-            
+        
+    
 def generate_prompt(report_type, project_details, shooting_details):
     prompts = {
         "logistics": f"""
-        Given the following project details, generate a comprehensive logistics plan including transportation, accommodation, and any relevant recommendations:
+        Given the following project details, generate a comprehensive logistics plan including transportation(Mode of Travel and Price break down),Consider how the crew and equipment will be transported,How far is the shoot location from the shoot location, accommodation, and any relevant recommendations:
 
         Project Details:
         {project_details}

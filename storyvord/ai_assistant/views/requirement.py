@@ -19,7 +19,7 @@ class Requirement(APIView):
     """
     serializer_class = ProjectRequirementsSerializer
 
-    def post(self, request):
+    def get(self, request):
         req_id = request.query_params.get('req_id')
         print("Request ID:", req_id)
         try:

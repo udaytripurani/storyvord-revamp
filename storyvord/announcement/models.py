@@ -1,8 +1,11 @@
 from django.db import models
-
+import logging
 from accounts.models import User
 from project.models import ProjectDetails, Membership
 from django.core.exceptions import ValidationError
+
+import logging
+logger = logging.getLogger(__name__)
 
 # Create your models here.
 class Announcement(models.Model):
@@ -33,6 +36,33 @@ class ProjectAnnouncement(models.Model):
         title_display = self.title if self.title else "Untitled Announcement"
         return f"{title_display} (Urgent)" if self.is_urgent else title_display
     
+    def save(self, *args, **kwargs):
+        # Save the announcement first
+        super().save(*args, **kwargs)
+        # Automatically populate recipients if not already added
+        if not self.recipients.exists():
+            self.assign_default_recipients()
+            
+    def assign_default_recipients(self, roles=None):
+        """
+        Automatically assigns all members of the project as recipients.
+        If roles are provided, only members with the specified roles will be assigned.
+        """
+        try:
+            memberships = Membership.objects.filter(project=self.project)
+
+            if roles:
+                memberships = memberships.filter(role__name__in=roles)
+
+            for membership in memberships:
+                recipient, created = ProjectAnnouncementRecipient.objects.get_or_create(
+                    project_announcement=self, membership=membership
+                )
+
+        except Exception as e:
+            logger.exception(f"Error assigning default recipients for announcement {self.id}")
+            raise
+
     def clean(self):
         if not self.title and not self.message:
             raise ValidationError("Either a title or a message must be provided.")

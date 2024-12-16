@@ -2,7 +2,6 @@ from rest_framework import serializers
 from ..models import ProjectTask, Membership
 from accounts.models import User
     
-
 class ProjectTaskSerializer(serializers.ModelSerializer):
     # assigned_to = serializers.PrimaryKeyRelatedField(
     #     many=True,  # Indicates a many-to-many relationship
@@ -78,7 +77,12 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         
         # Update many-to-many relationship for assigned_to
         if assigned_to_data is not None:
-            instance.assigned_to.set(assigned_to_data)
+            memberships = Membership.objects.filter(id__in=assigned_to_data)
+            if memberships.count() != len(assigned_to_data):
+                raise serializers.ValidationError(
+                    {'assigned_to': 'One or more users are not valid members.'}
+                )
+            instance.assigned_to.set(memberships)
         
         instance.save()
         return instance

@@ -23,6 +23,18 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email']
         
 class ProjectAnnouncementSerializer(serializers.ModelSerializer):
+    role_filter = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        write_only=True,
+        help_text="Optional list of roles to filter recipients.",
+    )
     class Meta:
         model = ProjectAnnouncement
         fields = '__all__'
+    
+    def create(self, validated_data):
+        role_filter = validated_data.pop('role_filter', None)
+        announcement = super().create(validated_data)
+        announcement.assign_default_recipients(roles=role_filter)
+        return announcement

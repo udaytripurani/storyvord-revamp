@@ -56,13 +56,36 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
             return response
     # Update Task
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        if serializer.is_valid():
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            print("Instance:", instance)
+            serializer = self.get_serializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'status': status.HTTP_201_CREATED,
+                'message': 'Task Updated successfully',
+                'data': {
+                    'task_id': instance.id,
+                    'title': instance.title,
+                    'description': instance.description,
+                    'assigned_to': [
+                        {
+                            'id': membership.user.id,
+                            'email': membership.user.email,
+                        } for membership in instance.assigned_to.all()
+                    ],
+                    'due_date': instance.due_date,
+                    'status': instance.status,
+                    'is_completed': instance.is_completed
+                }
+            }
+            return Response(data)
+        except Exception as exc:
+            logger.error(f"Error updating task: {exc}")
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
     
     # List Tasks
     def list(self, request, *args, **kwargs):
@@ -133,43 +156,85 @@ class ProjectTaskViewSet(viewsets.ModelViewSet):
             logger.error(f"Error retierving task: {exc}")
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
+        
+    # Update a task
+    # def put(self, request, *args, **kwargs):
+    #     try:
+    #         user = request.user
+    #         print("User:", user)
+    #         tasks = self.queryset.filter(assigned_to__user=user)
+    #         if tasks.count() == 0:
+    #             return Response(status=status.HTTP_404_NOT_FOUND)
+            
+    #         task_id = request.query_params.get('task_id')
+    #         if not task_id:
+    #             return Response({"error": "Task ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+    #         task = tasks.get(pk=task_id)
+    #         print("Task:", task)
+    #         serializer = self.get_serializer(task, data=request.data, partial=True)
+    #         if serializer.is_valid():
+    #             print("Serializer:", serializer.data)
+    #         if serializer.is_valid():
+    #             task_instance = serializer.save()
+    #             print("Task Instance:", task_instance)
+    #             assigned_users = list(task_instance.assigned_to.all())
+    #             data = {
+    #                 'status': status.HTTP_201_CREATED,
+    #                 'message': 'Task Updated successfully',
+    #                 'data': {
+    #                     'task_id': task_instance.id,
+    #                     'title': task_instance.title,
+    #                     'description': task_instance.description,
+    #                     'assigned_to': [
+    #                         {
+    #                             'id': membership.user.id,
+    #                             'email': membership.user.email,
+    #                         } for membership in assigned_users
+    #                     ],
+    #                     'due_date': task_instance.due_date,
+    #                     'status': task_instance.status,
+    #                     'is_completed': task_instance.is_completed
+    #                 }
+    #             }
+    #             return Response(data)
+    #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+    #     except Exception as exc:
+    #         logger.error(f"Error updating task: {exc}")
+    #         response = custom_exception_handler(exc, self.get_renderer_context())
+    #         return response
     
     # Delete a task
     def destroy(self, request, *args, **kwargs):
+        print("Destroying task")
+        print("pk:", kwargs['pk'])
         try:
             user = request.user
+            print("User:", user)
             tasks = self.queryset.filter(assigned_to__user=user)
+            print("Tasks:", tasks)
             if tasks.count() == 0:
+                print("No tasks found")
                 return Response(status=status.HTTP_404_NOT_FOUND)
             
             task = tasks.get(pk=kwargs['pk'])
-            if task.assigned_by != user:
+            print("Task:", task)
+            print("Assigned by:", task.assigned_by)
+            print("User:", user)
+            if task.assigned_by.user != user:
+                print("Not authorized to delete this task.")
                 raise Exception("You are not authorized to delete this task.")
             task.delete()
+            print("Task deleted")
             data = {
                 'status': status.HTTP_200_OK,
-                'message': 'Tasks Fetched successfully',
-                'data': {
-                    'tasks': [
-                        {
-                            'id': task.id,
-                            'title': task.title,
-                            'description': task.description,
-                            'assigned_to': [
-                                {
-                                    'id': membership.user.id,
-                                    'email': membership.user.email,
-                                } for membership in task.assigned_to.all()
-                            ],
-                            'due_date': task.due_date,
-                            'status': task.status,
-                            'is_completed': task.is_completed
-                        } for task in tasks
-                    ]
-                }
+                'message': 'Tasks Deleted successfully'
             }
+            print("Returning response", data)
             return Response(data)
         except Exception as exc:
+            print("Error:", exc)
             logger.error(f"Error getting all tasks: {exc}")
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
