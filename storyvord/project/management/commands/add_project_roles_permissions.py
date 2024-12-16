@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.db import IntegrityError
 from ...models import Permission, Role
 
 class Command(BaseCommand):
@@ -13,11 +14,11 @@ class Command(BaseCommand):
             ("add_members", "Can add members to project"),
             ("create_task", "Can create task"),
 
-            # Calander permissions
-            ("create_calander_event", "Can create calander event"),
-            ("view_calander_event", "Can view calander"),
-            ("edit_calander_event", "Can edit calander"),
-            ("delete_calander_event", "Can delete calander event"),
+            # Calendar permissions
+            ("create_calander_event", "Can create calendar event"),
+            ("view_calander_event", "Can view calendar"),
+            ("edit_calander_event", "Can edit calendar"),
+            ("delete_calander_event", "Can delete calendar event"),
 
             # Folder permissions
             ("view_folders", "Can view all folders in a project"),
@@ -35,7 +36,7 @@ class Command(BaseCommand):
         for permission, description in permissions:
             perm, created = Permission.objects.get_or_create(
                 name=permission,
-                description=description
+                defaults={'description': description}
             )
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Permission added successfully: {permission}'))
@@ -50,15 +51,19 @@ class Command(BaseCommand):
 
         # Add roles
         for role, description, is_global in roles:
-            r, created = Role.objects.get_or_create(
-                name=role,
-                description=description,
-                is_global=is_global
-            )
-            if created:
-                self.stdout.write(self.style.SUCCESS(f'Role added successfully: {role}'))
-            else:
-                self.stdout.write(self.style.WARNING(f'Role already exists: {role}'))
+            try:
+                r, created = Role.objects.get_or_create(
+                    name=role,
+                    defaults={'description': description, 'is_global': is_global}
+                )
+                if created:
+                    self.stdout.write(self.style.SUCCESS(f'Role added successfully: {role}'))
+                else:
+                    self.stdout.write(self.style.WARNING(f'Role already exists: {role}'))
+            except IntegrityError:
+                # Handle potential race conditions or duplicates
+                r = Role.objects.get(name=role)
+                self.stdout.write(self.style.WARNING(f'Handled duplicate role: {role}'))
 
         # Define role-permission relationships
         role_permissions = [
@@ -80,7 +85,6 @@ class Command(BaseCommand):
             ("admin", "edit_callsheet"),
             ("admin", "delete_callsheet"),
 
-            # Note: edit_calander?
             ("admin", "edit_calander_event"),
 
             ("member", "view_calander_event"),
@@ -92,7 +96,7 @@ class Command(BaseCommand):
             try:
                 role = Role.objects.get(name=role_name)
                 permission = Permission.objects.get(name=permission_name)
-                role.permission.add(permission)
+                role.permission.add(permission)  # Ensure Role model has a `permission` ManyToManyField
                 self.stdout.write(self.style.SUCCESS(f'Permission {permission_name} added to role {role_name}'))
             except Role.DoesNotExist:
                 self.stdout.write(self.style.ERROR(f'Role {role_name} does not exist'))
