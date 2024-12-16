@@ -57,7 +57,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         else:
             try:
                 if session_id is None:
-                    session_id = str(uuid.uuid4())
+                    self.session_id = str(uuid.uuid4())
 
             # Check for existing session or create a new one
                 await self.create_chat_session(self.scope['user'], self.session_id, agent)
@@ -96,6 +96,12 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             user_message_embedding,embedding_cost = await self.generate_embedding(user_message)
             relevant_context = await self.get_relevant_messages(self.session_id, user_message_embedding)
             ai_response,input_tokens,output_tokens,response_cost = await self.get_ai_response(user_message, relevant_context)
+            # Change the title of the chat if the context is changing
+            current_title = await database_sync_to_async(ChatSession.objects.filter(session_id=self.session_id).values_list('title', flat=True).first)()
+            suggested_title = await self.suggest_chat_title(user_message, relevant_context)
+            if current_title != suggested_title and len(suggested_title) > len(current_title):
+                await database_sync_to_async(ChatSession.objects.filter(session_id=self.session_id).update)(title=suggested_title)
+                logger.info(f"Updated chat session title: {suggested_title}")
             total_cost = embedding_cost + response_cost
             logger.info(f"Tokens used - Input: {input_tokens}, Output: {output_tokens}, Total Cost: ${total_cost:.4f}")
 
@@ -227,8 +233,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             session_uuid = uuid.UUID(session_id)
             session, created = ChatSession.objects.get_or_create(
                 session_id=session_uuid,
-                defaults={'user': user
-                          }
+                defaults={'user': user}
             )
             if agent_id is None:
                 agent = session.agent
@@ -237,8 +242,10 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                     agent = AiAgents.objects.get(id=agent_id)
                 except AiAgents.DoesNotExist:
                     raise ValueError("Agent does not exist")
-                if agent != session.agent:
-                    raise ValueError("Agent Mismatch")
+                
+                # if agent != session.agent:
+                #     print("Agent Mismatch")
+                #     raise ValueError("Agent Mismatch")
 
             session.agent = agent
             session.save()
@@ -258,7 +265,8 @@ class AIChatConsumer(AsyncWebsocketConsumer):
                 session=session, 
                 user_message=user_message, 
                 ai_response=ai_response,
-                embedding=json.dumps(embedding)  # Store embedding as JSON
+                embedding=json.dumps(embedding),  # Store embedding as JSON
+                user = self.scope['user']
             )
         except Exception as e:
             logger.error(f"Error saving chat message: {e}")
@@ -271,3 +279,41 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             return True
         except ChatSession.DoesNotExist:
             return False
+        
+    @database_sync_to_async    
+    def suggest_chat_title(self,user_message, context):
+        try:
+             # Aggregate recent messages for context building
+            all_context = context + [{"role": "user", "content": user_message}]
+            
+            # Prepare messages for OpenAI API
+            messages = [
+                {"role": "system", "content": "You are an AI assistant tasked with suggesting concise, contextually relevant chat titles. Prioritize clarity and relevance to the conversation."},
+                {"role": "assistant", "content": "Examples of good titles: 'Project Plan for AI Deployment', 'Bug Fixing Discussion', 'Team Onboarding'."},
+                *all_context
+            ]
+            
+            # Call OpenAI API to generate a suggestion
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=messages,
+                max_tokens=20,  # Restrict to concise title output
+                temperature=0.7  # Adjust for balanced creativity
+            )
+
+            # Extract the suggested title from the response
+            suggested_title = response.choices[0].message.content.strip()
+            
+            current_title = ChatSession.objects.filter(session_id=self.session_id).values_list('title', flat=True).first()
+            
+            # Check for semantic improvement
+            if current_title and len(suggested_title) > len(current_title):
+                return suggested_title
+            elif not current_title:  # No existing title
+                return suggested_title
+            else:  # Current title is better
+                return current_title
+            
+        except Exception as e:
+            logger.error(f"Error suggesting chat title: {e}")
+            return "Untitled Chat"
