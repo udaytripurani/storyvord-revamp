@@ -40,8 +40,8 @@ class CallSheetListAPIView(APIView):
         try:
             project = get_object_or_404(ProjectDetails, pk=project_id)
 
-            # if not self.check_rbac(request.user, project, 'create_callsheet'):
-                # raise PermissionError('You do not have permission to create callsheet for this project')
+            if not self.check_rbac(request.user, project, 'create_callsheet'):
+                raise PermissionError('You do not have permission to create callsheet for this project')
             
             data = request.data.copy()
             data['project'] = project.project_id
