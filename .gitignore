@@ -153,3 +153,4 @@ Thumbs.db
 *.json
 */media
 */staticfiles
+*/logs
