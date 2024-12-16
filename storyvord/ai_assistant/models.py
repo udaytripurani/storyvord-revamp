@@ -7,7 +7,7 @@ User = get_user_model()
 class ChatSession(models.Model):
     session_id = models.CharField(primary_key=True, editable=False,max_length=255, unique=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions')
-    title = models.CharField(max_length=255, null=True, blank=True)
+    title = models.CharField(max_length=255, null=True, blank=True, default="Default Title")
     agent = models.ForeignKey('AiAgents', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
