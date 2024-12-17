@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Prefetch
+from storyvord.exception_handlers import custom_exception_handler
 from .models import DialogsModel, MessageModel, RoomModel
 from .serializers import DialogSerializer, MessageSerializer, RoomSerializer, RoomMessageSerializer
 from accounts.models import User
@@ -13,12 +14,15 @@ class DialogListView(APIView, LimitOffsetPagination):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        dialogs = DialogsModel.objects.filter(Q(user1=request.user) | Q(user2=request.user)) \
-            .select_related('user1', 'user2')
-
-        paginated_dialogs = self.paginate_queryset(dialogs, request, view=self)
-        serializer = DialogSerializer(paginated_dialogs, many=True, context={'request': request})
-        return self.get_paginated_response(serializer.data)
+        try:
+            dialogs = DialogsModel.objects.filter(Q(user1=request.user) | Q(user2=request.user)) \
+                .select_related('user1', 'user2')
+            paginated_dialogs = self.paginate_queryset(dialogs, request, view=self)
+            serializer = DialogSerializer(paginated_dialogs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 
 class DialogMessagesView(APIView, LimitOffsetPagination):

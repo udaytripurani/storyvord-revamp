@@ -12,8 +12,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_name(self, obj):
         profile = getattr(obj, 'clientprofile', None) or getattr(obj, 'crewprofile', None)
-        return f"{profile.firstName} {profile.lastName}" if profile else obj.email
-
+        personal_info = getattr(obj, 'personalinfo', None)
+        name = personal_info.full_name if personal_info else None
+        return name if personal_info else profile.email
 
 class DialogSerializer(serializers.ModelSerializer):
     user1 = UserProfileSerializer(read_only=True)
