@@ -25,6 +25,19 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
+        
+class CallTime(models.Model):
+    call_sheet = models.ForeignKey(CallSheet, on_delete=models.CASCADE, related_name='call_time')
+    name = models.CharField(max_length=255)
+    position = models.CharField(max_length=255)
+    calltime = models.TimeField()
+    email = models.EmailField()
+    phone = models.CharField(max_length=255)
+    remarks = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return self.name
+
 class Scenes(models.Model):
     call_sheet = models.ForeignKey(CallSheet, on_delete=models.CASCADE, related_name='scenes')
     scene_number = models.CharField(max_length=255)
