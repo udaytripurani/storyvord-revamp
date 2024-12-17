@@ -718,26 +718,52 @@ class CompanyProjectsView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-        
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from .models import CrewProfile
+from accounts.models import PersonalInfo
+from .serializers import CrewProfileSerializer
+
 class CrewProfileSearchView(APIView):
+    """
+    API view to search crew profiles based on location, skills, and name.
+    """
 
     def get(self, request, format=None):
         try:
+            
             location_query = request.query_params.get('location', '')
             skills_query = request.query_params.get('skills', '')
+            name_query = request.query_params.get('name', '')
 
-            # Filter crew profiles based on partial matches to location and skills
-            crews = CrewProfile.objects.filter(
-                location__icontains=location_query, 
-                skills__icontains=skills_query, 
-                active=True
+            
+            personal_info_ids = PersonalInfo.objects.filter(
+                Q(full_name__icontains=name_query)  
+            ).values_list('id', flat=True)
+
+            
+            crew_profiles = CrewProfile.objects.filter(
+                Q(personal_info_id__in=personal_info_ids) &  
+                Q(personal_info__location__icontains=location_query) &  
+                Q(skills__icontains=skills_query),  
+                active=True 
             )
-            serializer = CrewProfileSerializer(crews, many=True)
-            data = {
+
+            
+            serializer = CrewProfileSerializer(crew_profiles, many=True)
+            response_data = {
                 'message': 'Success',
                 'data': serializer.data
             }
-            return Response(serializer.data, status=status.HTTP_200_OK)
+
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         except Exception as exc:
-            response = custom_exception_handler(exc, self.get_renderer_context())
-            return response
+            
+            return Response(
+                {'message': 'An error occurred', 'details': str(exc)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
