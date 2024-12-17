@@ -117,41 +117,39 @@ class CompanyTaskSerializer(serializers.ModelSerializer):
     created_by = UserSerializer(read_only=True)
     completed = serializers.BooleanField(read_only=True)
     completion_requested = serializers.BooleanField(read_only=True)
+    assigned_to = UserSerializer(many=True, read_only=True)
 
     class Meta:
         model = ClientCompanyTask
         fields = '__all__'
-        read_only_fields = ('created_at', 'updated_at', 'completed', 'completion_requested', 'assigned_to')
+        read_only_fields = ('created_at', 'updated_at', 'completed', 'completion_requested')
 
     def validate_assigned_to(self, value):
         user = self.context['request'].user
-
         try:
-            # Check if the assigned user is an employee of the client’s company
-            clientProfile = ClientProfile.objects.get(user=user)
-        except ClientProfile.DoesNotExist:
+            clientCompanyProfile = ClientCompanyProfile.objects.get(user=user)
+        except ClientCompanyProfile.DoesNotExist:
             raise serializers.ValidationError("Client profile does not exist for the current user.")
-
-        if not clientProfile.employee_profile.filter(id=value.id).exists():
-            raise serializers.ValidationError("The user is not an employee of the client’s company.")
-
+        for assigned_user in value:
+            if not clientCompanyProfile.employee_profile.filter(id=assigned_user.id).exists():
+                raise serializers.ValidationError(f"The user {assigned_user.email} is not an employee of the client’s company.")
         return value
 
     def create(self, validated_data):
         user = self.context['request'].user
         validated_data['created_by'] = user
+        assigned_to_ids = self.initial_data.get('assigned_to', [])
+        assigned_to_users = User.objects.filter(id__in=assigned_to_ids)
+        self.validate_assigned_to(assigned_to_users)
+        task = ClientCompanyTask.objects.create(**validated_data)
+        task.assigned_to.set(assigned_to_users)
+        return task
 
-        # Extract assigned_to from the initial data
-        assigned_to_id = self.initial_data.get('assigned_to')
-        if assigned_to_id:
-            try:
-                assigned_to_user = User.objects.get(id=assigned_to_id)
-                validated_data['assigned_to'] = assigned_to_user
-            except User.DoesNotExist:
-                raise serializers.ValidationError("Assigned user does not exist.")
-
-        return super().create(validated_data)
-
+    def update(self, instance, validated_data):
+        assigned_to_ids = self.initial_data.get('assigned_to', [])
+        assigned_to_users = User.objects.filter(id__in=assigned_to_ids)
+        instance.assigned_to.set(assigned_to_users)
+        return super().update(instance, validated_data)
 
 class TaskCompletionRequestSerializer(serializers.ModelSerializer):
     class Meta:
