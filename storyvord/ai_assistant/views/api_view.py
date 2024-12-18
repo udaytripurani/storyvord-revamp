@@ -22,7 +22,7 @@ class ChatHistoryAPIView(APIView):
 
     def get(self, request, id, *args, **kwargs):
         try:
-            chat_messages = ChatMessage.objects.filter(session_id=id).select_related('session', 'user')
+            chat_messages = ChatMessage.objects.filter(session_id=id).select_related('session', 'user').order_by('timestamp')
             if not chat_messages.exists():
                 return Response({"detail": "Chat session not found."}, status=status.HTTP_404_NOT_FOUND)
             
@@ -37,4 +37,3 @@ class ChatHistoryAPIView(APIView):
             return Response({"detail": "Chat session not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-

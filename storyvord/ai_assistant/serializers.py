@@ -5,7 +5,7 @@ from project.models import ProjectRequirements
 class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
-        fields = '__all__'
+        exclude = ('embedding',)
         
 class ChatSessionSerializer(serializers.ModelSerializer):
     class Meta:
