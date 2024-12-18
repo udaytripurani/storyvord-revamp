@@ -22,6 +22,7 @@ urlpatterns = [
     path('crew-list/<int:pk>/', CrewListView.as_view(), name='crew-detail'),
     
     # Crew Portfolio and its verification Urls
+    path('onboarding/', CrewOnboarding.as_view(), name='crew-onboarding'),
     path('portfolios/', CrewPortfolioListCreate.as_view(), name='crew-portfolio-list-create'),
     path('portfolios/<int:pk>/', CrewPortfolioDetail.as_view(), name='crew-portfolio-detail'),
     

@@ -30,7 +30,10 @@ class CrewProfileView(APIView):
         try:
             profile = get_object_or_404(CrewProfile, user=request.user)
             serializer = CrewProfileSerializer(profile, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
             serializer.save()
             data = {
                 'message': 'Success',
@@ -61,7 +64,10 @@ class CrewCreditsListCreateView(APIView):
     def post(self, request, format=None):
         try:
             serializer = CrewCreditsSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -96,7 +102,10 @@ class CrewCreditsDetailView(APIView):
         try:
             credit = self.get_object(pk, request.user)
             serializer = CrewCreditsSerializer(credit, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -140,7 +149,10 @@ class CrewEducationListCreateView(APIView):
     def post(self, request, format=None):
         try:
             serializer = CrewEducationSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -175,7 +187,10 @@ class CrewEducationDetailView(APIView):
         try: 
             education = self.get_object(pk, request.user)
             serializer = CrewEducationSerializer(education, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -220,7 +235,10 @@ class EndorsementfromPeersListCreateView(APIView):
     def post(self, request, format=None):
         try:
             serializer = EndorsementfromPeersSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -255,7 +273,10 @@ class EndorsementfromPeersDetailView(APIView):
         try:
             endorsement = self.get_object(pk, request.user)
             serializer = EndorsementfromPeersSerializer(endorsement, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+            
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
             serializer.save()
             data = {
                 'message': 'Success',
@@ -300,7 +321,10 @@ class SocialLinksListCreateView(APIView):
     def post(self, request, format=None):
         try:
             serializer = SocialLinksSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -335,7 +359,10 @@ class SocialLinksDetailView(APIView):
         try: 
             link = self.get_object(pk, request.user)
             serializer = SocialLinksSerializer(link, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
             data = {
                 'message': 'Success',
@@ -407,6 +434,40 @@ class CrewListView(APIView):
             return response
     
 
+class CrewOnboarding(APIView):
+    permissions_classes = [permissions.IsAuthenticated]
+    serializers_class = CrewPortfolioSerializer
+
+    def post(self, request):
+        try:
+            crew_profile = CrewProfile.objects.get(user=request.user)
+
+            user = request.user
+
+            if str(user.user_type) != 'crew':
+                raise PermissionError('Only crew can onboard')
+        
+            if user.steps:
+                raise PermissionError('User has already onboarded')
+            
+            serializer = CrewPortfolioSerializer(data=request.data)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            serializer.save(crew=crew_profile)
+
+            user.steps = True
+            user.user_stage = 2
+            user.save()
+            
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
 # Crew Porfolio and its verification APIS
 
 class CrewPortfolioListCreate(APIView):
@@ -434,7 +495,8 @@ class CrewPortfolioListCreate(APIView):
             crew_profile = CrewProfile.objects.get(user=request.user)
 
             serializer = CrewPortfolioCreateSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             portfolio = serializer.save(crew=crew_profile)
             data = {
                 'message': 'Success',
@@ -491,7 +553,8 @@ class CrewPortfolioDetail(APIView):
                                  "message": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
 
             serializer = CrewPortfolioSerializer(portfolio, data=request.data, partial=True)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             serializer.save()
             data = {
                 'message': 'Success',
@@ -537,7 +600,8 @@ class VerifyClientReference(APIView):
                                  "message": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
 
             serializer = ClientReferenceVerificationSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             verification, created = ClientReferenceVerification.objects.get_or_create(crew_portfolio=portfolio, defaults=serializer.validated_data)
             if not created:
                 for attr, value in serializer.validated_data.items():
@@ -572,7 +636,8 @@ class VerifyImbdLink(APIView):
                                  "message": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
 
             serializer = ImbdLinkVerificationSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             verification, created = ImbdLinkVerification.objects.get_or_create(crew_portfolio=portfolio, defaults=serializer.validated_data)
             if not created:
                 for attr, value in serializer.validated_data.items():
@@ -607,7 +672,8 @@ class VerifyWorkSample(APIView):
                                  "detail": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
 
             serializer = WorkSampleVerificationSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             verification, created = WorkSampleVerification.objects.get_or_create(crew_portfolio=portfolio, defaults=serializer.validated_data)
             if not created:
                 for attr, value in serializer.validated_data.items():
@@ -640,7 +706,8 @@ class VerifyEmailAgreement(APIView):
                 return Response({"detail": "Not authorized."}, status=status.HTTP_403_FORBIDDEN)
 
             serializer = EmailAgreementSerializer(data=request.data)
-            serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             verification, created = EmailAgreement.objects.get_or_create(crew_portfolio=portfolio, defaults=serializer.validated_data)
             if not created:
                 for attr, value in serializer.validated_data.items():
