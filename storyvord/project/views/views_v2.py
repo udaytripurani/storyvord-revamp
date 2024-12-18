@@ -189,6 +189,29 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
         return ProjectRequirements.objects.filter(
             project=self.request.query_params.get('project_id')
         )
+        
+    def list(self, request, *args, **kwargs):
+        if self.request.query_params.get('project_id') is None:
+            return Response({'error': 'project_id is required in params'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'status': 'success','message': 'Project requirements retrieved successfully' ,'data': serializer.data}, status=status.HTTP_200_OK)
+    
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            req_id = kwargs['pk']
+            req = get_object_or_404(ProjectRequirements, id=req_id)
+            if req.project.owner != request.user and not Membership.objects.filter(project=req.project, user=request.user).exists():  #TODO Add role based permission instead of user.
+                raise PermissionDenied("You do not have permission to view this project requirements.")
+            data = self.get_serializer(req).data
+            return Response({'status': 'success','message': 'Project requirements retrieved successfully', 'data': data}, status=status.HTTP_200_OK)
+        except ProjectRequirements.DoesNotExist:
+            return Response({'error': 'Project requirements not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            return Response({'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            logger.error(f"Unexpected error occurred while {request.user.id} tried to retrieve project requirements. Error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def create(self, request, *args, **kwargs):
         data = request.data
@@ -330,6 +353,38 @@ class ShootingDetailsViewSet(viewsets.ModelViewSet):
         # Return the filtered queryset
         logger.info(f"User {user.id} accessed shooting details for project {project_id}.")
         return ShootingDetails.objects.filter(project=project).distinct()
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            shoot_details = get_object_or_404(ShootingDetails,id=kwargs['pk'])
+            validated_data = request.data
+            if shoot_details.project.owner != request.user and not Membership.objects.filter(project=shoot_details.project, user=request.user).exists():
+                logger.warning(f"User {request.user.id} tried to update requirements for project {shoot_details.project.project_id} without permission")
+                raise PermissionDenied("You do not have permission to update requirements for this project.")
+
+            serializer = self.get_serializer(shoot_details, data=validated_data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            logger.info(f"Shooting details updated for project {shoot_details.project.project_id} by user {request.user.id}")
+            return Response({'status': 'success','message': 'Shooting details updated successfully','data':serializer.data}, status=status.HTTP_200_OK)
+        except Exception as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            
+    
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            shoot_details = get_object_or_404(ShootingDetails, id=kwargs['pk'])
+            if shoot_details.project.owner != request.user and not Membership.objects.filter(project=shoot_details.project, user=request.user).exists():  #TODO Add role based permission instead of user.
+                raise PermissionDenied("You do not have permission to view this shoot details")
+            data = self.get_serializer(shoot_details).data
+            return Response({'status': 'success','message': 'Shooting details retrieved successfully','data':data}, status=status.HTTP_200_OK)
+        except ShootingDetails.DoesNotExist:
+            return Response({'error': 'Shoot Details not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            return Response({'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            logger.error(f"Unexpected error occurred while {request.user.id} tried to retrieve shoot details. Error: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # Role Viewset
 class RoleViewSet(viewsets.ModelViewSet):
