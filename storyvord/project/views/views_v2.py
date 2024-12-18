@@ -190,12 +190,12 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
             project=self.request.query_params.get('project_id')
         )
         
-    def list(self, request, *args, **kwargs):
-        if self.request.query_params.get('project_id') is None:
-            return Response({'error': 'project_id is required in params'}, status=status.HTTP_400_BAD_REQUEST)
-        queryset = self.filter_queryset(self.get_queryset())
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({'status': 'success','message': 'Project requirements retrieved successfully' ,'data': serializer.data}, status=status.HTTP_200_OK)
+    # def list(self, request, *args, **kwargs):
+    #     if self.request.query_params.get('project_id') is None:
+    #         return Response({'error': 'project_id is required in params'}, status=status.HTTP_400_BAD_REQUEST)
+    #     queryset = self.filter_queryset(self.get_queryset())
+    #     serializer = self.get_serializer(queryset, many=True)
+    #     return Response({'status': 'success','message': 'Project requirements retrieved successfully' ,'data': serializer.data}, status=status.HTTP_200_OK)
     
     def retrieve(self, request, *args, **kwargs):
         try:
