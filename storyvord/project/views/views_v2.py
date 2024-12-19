@@ -20,7 +20,7 @@ from ..serializers.serializers_v2 import (
 )
 import uuid
 from django.http import JsonResponse
-from project.utils import generate_report, project_ai_suggestion
+from project.utils import generate_report, generate_report_v2, project_ai_suggestion
 
 import logging
 logger = logging.getLogger(__name__)
@@ -569,6 +569,29 @@ class SuggestionView(APIView):
             }
         )
         return reports
+    
+    def renerate_report_v2(self, project, project_details, shooting_details, regenerate=None):
+        reports = {}
+        if not regenerate or "logistics" in regenerate:
+            reports["logistics"] = generate_report_v2("logistics", project_details, shooting_details)
+        if not regenerate or "budget" in regenerate:
+            reports["budget"] = generate_report_v2("budget", project_details, shooting_details)
+        if not regenerate or "compliance" in regenerate:
+            reports["compliance"] = generate_report_v2("compliance", project_details, shooting_details)
+        if not regenerate or "culture" in regenerate:
+            reports["culture"] = generate_report_v2("culture", project_details, shooting_details)
+
+        # Update or create AI suggestions in the database
+        ProjectAISuggestions.objects.update_or_create(
+            project=project,
+            defaults={
+                'suggested_logistics': reports.get("logistics", ""),
+                'suggested_budget': reports.get("budget", ""),
+                'suggested_compliance': reports.get("compliance", ""),
+                'suggested_culture': reports.get("culture", "")
+            }
+        )
+        return reports
 
     def get(self, request):
         try:
@@ -610,6 +633,8 @@ class SuggestionView(APIView):
 
             # Regenerate specific reports or all reports
             reports = self.regenerate_report(project, project_details, shooting_details, regenerate)
+            
+            # reports_v2 = self.renerate_report_v2(project, project_details, shooting_details, regenerate)
 
             return Response({
                 'success': True,
@@ -618,6 +643,7 @@ class SuggestionView(APIView):
                     'project_id': project_id,
                     'suggestion': ai_suggestion,
                     'report': reports
+                    # 'reports_v2': reports_v2
                 }
             }, status=200)
 

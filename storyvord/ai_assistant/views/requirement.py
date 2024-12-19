@@ -11,7 +11,21 @@ from pydantic import BaseModel
 from typing import List
 from openai import OpenAI
 
-client = OpenAI()
+# client = OpenAI()
+
+import os
+import base64
+from openai import AzureOpenAI
+
+endpoint = os.getenv("ENDPOINT_URL")
+deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4o")
+subscription_key = os.getenv("AZURE_OPENAI_API_KEY")
+
+client = AzureOpenAI(
+    azure_endpoint=endpoint,
+    api_key=subscription_key,
+    api_version="2024-08-01-preview",
+)
 
 class Requirement(APIView):
     """
