@@ -16,9 +16,23 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Get the OpenAI API key from environment variables
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-client = OpenAI(api_key=OPENAI_API_KEY)
+# OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+# client = OpenAI(api_key=OPENAI_API_KEY)
 User = get_user_model()
+
+import os
+import base64
+from openai import AzureOpenAI
+
+endpoint = os.getenv("ENDPOINT_URL")
+deployment = os.getenv("DEPLOYMENT_NAME", "gpt-4o")
+subscription_key = os.getenv("AZURE_OPENAI_API_KEY")
+
+client = AzureOpenAI(
+    azure_endpoint=endpoint,
+    api_key=subscription_key,
+    api_version="2024-08-01-preview",
+)
 
 class AIChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
@@ -122,9 +136,8 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         try:
             agent= self.get_agent(self.session_id)
             agent = await agent
-                        
             agent_context = agent.context
-
+            
             messages = [
                         {"role": "system", "content": agent_context},
                         {"role": "system", "content": "Here is the previous context:"},
@@ -132,8 +145,9 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             messages.extend(context)  # Add the previous context
             messages.append({"role": "user", "content": user_message})
 
+
             completion = client.chat.completions.create(
-                model="gpt-4o-2024-08-06",
+                model="gpt-4o",
                 messages=messages
             )
             
@@ -160,7 +174,6 @@ class AIChatConsumer(AsyncWebsocketConsumer):
         try:
             # Call OpenAI's embeddings API to get the embedding for the text
             response = client.embeddings.create(input=text, model="text-embedding-3-small")
-
             cost_per_token = 0.00000002  # Replace with actual cost per token for embeddings
             tokens_used = response.usage.total_tokens
             cost = tokens_used * cost_per_token
@@ -295,7 +308,7 @@ class AIChatConsumer(AsyncWebsocketConsumer):
             
             # Call OpenAI API to generate a suggestion
             response = client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o",
                 messages=messages,
                 max_tokens=20,  # Restrict to concise title output
                 temperature=0.7  # Adjust for balanced creativity
