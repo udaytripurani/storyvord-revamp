@@ -718,7 +718,6 @@ class CompanyProjectsView(APIView):
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -732,37 +731,36 @@ class CrewProfileSearchView(APIView):
     API view to search crew profiles based on location, skills, and name.
     """
 
-    def get(self, request, format=None):
+    def post(self, request, format=None):
         try:
-            
-            location_query = request.query_params.get('location', '')
-            skills_query = request.query_params.get('skills', '')
-            name_query = request.query_params.get('name', '')
+            # Extract data from request body
+            location_query = request.data.get('location', '')
+            skills_query = request.data.get('skills', '')
+            name_query = request.data.get('name', '')
 
-            
+            # Perform search operations
             personal_info_ids = PersonalInfo.objects.filter(
-                Q(full_name__icontains=name_query)  
+                Q(full_name__icontains=name_query)
             ).values_list('id', flat=True)
 
-            
             crew_profiles = CrewProfile.objects.filter(
-                Q(personal_info_id__in=personal_info_ids) &  
-                Q(personal_info__location__icontains=location_query) &  
-                Q(skills__icontains=skills_query),  
-                active=True 
+                Q(personal_info_id__in=personal_info_ids) &
+                Q(personal_info__location__icontains=location_query) &
+                Q(skills__icontains=skills_query),
+                active=True
             )
 
-            
+            # Serialize results
             serializer = CrewProfileSerializer(crew_profiles, many=True)
             response_data = {
                 'message': 'Success',
                 'data': serializer.data
             }
 
-            
+            # Return success response
             return Response(response_data, status=status.HTTP_200_OK)
         except Exception as exc:
-            
+            # Return error response
             return Response(
                 {'message': 'An error occurred', 'details': str(exc)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
