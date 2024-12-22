@@ -175,40 +175,68 @@ class GetInvitesView(APIView):
 
     def get(self, request):
         try:
-            # Fetch all invites for the authenticated user
-            invites = ProjectInvite.objects.filter(invitee=request.user)
-            if not invites.exists():
-                return Response({'status': 'success', 'message': 'No invites found', 'data': []}, status=status.HTTP_200_OK)
+            # Fetch invites for the authenticated user
+            invites = ProjectInvite.objects.filter(
+                Q(inviter=request.user) | Q(invitee=request.user)
+            )
 
             # Serialize the invites
             serializer = ProjectInviteSerializer(invites, many=True)
+            invitee_invites = [invite for invite in serializer.data if invite['invitee'] == request.user.id]
+            inviter_invites = [invite for invite in serializer.data if invite['inviter'] == request.user.id]
 
-            # Group invites by project and fetch project details
+            project_id = request.query_params.get('project_id')
             project_data = {}
-            for invite in serializer.data:
-                project_id = invite['project']
-                if project_id not in project_data:
-                    # Fetch project details for the current project
-                    project = ProjectDetails.objects.get(project_id=project_id)
-                    project_data[project_id] = {
-                        'project_id': project.project_id,
-                        'project_name': project.name,
-                        'project_status': project.status,
-                        'created_at': project.created_at,
-                        'invites': []
-                    }
-                # Add invite details to the project
-                project_data[project_id]['invites'].append(invite)
 
-            # Convert the project data dictionary to a list
+            # If project_id is passed, filter the invites by project
+            if project_id:
+                for invite in invitee_invites + inviter_invites:
+                    proj_id = project_id
+                    if proj_id not in project_data:
+                        project = ProjectDetails.objects.get(Q(project_id=proj_id) & Q(owner=request.user))
+                        project_data[proj_id] = {
+                            'project_id': project.project_id,
+                            'project_name': project.name,
+                            'project_status': project.status,
+                            'created_at': project.created_at,
+                            'invites': []
+                        }
+                    project_data[proj_id]['invites'].append({
+                        'invite_id': invite['id'],
+                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
+                        'status': invite['status'],
+                        'updated_at': invite['updated_at']
+                    })
+
+            # If project_id is not passed, return all invites
+            else:
+                for invite in invitee_invites + inviter_invites:
+                    proj_id = invite['project']
+                    if proj_id not in project_data:
+                        project = ProjectDetails.objects.get(project_id=proj_id)
+                        project_data[proj_id] = {
+                            'project_id': project.project_id,
+                            'project_name': project.name,
+                            'project_status': project.status,
+                            'created_at': project.created_at,
+                            'invites': []
+                        }
+                    project_data[proj_id]['invites'].append({
+                        'invite_id': invite['id'],
+                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
+                        'status': invite['status'],
+                        'updated_at': invite['updated_at']
+                    })
+
             response_data = list(project_data.values())
-
             return Response({
                 'status': 'success',
                 'message': 'Invites retrieved successfully',
                 'data': response_data
             }, status=status.HTTP_200_OK)
 
+        except ProjectDetails.DoesNotExist:
+            return Response({'status':'false','message': 'Project does not exist or you do not have permission to view it','data':[]}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Unexpected error occurred while {request.user.id} tried to get invites. Error: {e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -305,7 +333,12 @@ class ProjectRequirementsViewSet(viewsets.ModelViewSet):
         user = request.user
 
         # Check permissions
-        project = get_object_or_404(ProjectDetails, project_id=validated_data.get("project"))
+        try:
+            project = get_object_or_404(ProjectDetails, project_id=validated_data.get("project"))
+        except Exception as exc:
+            return Response({'status': 'false','message':'Please send the project id in the body of the request', 'data': {}}, status=status.HTTP_404_NOT_FOUND)
+        #TODO Remove the project id from the request data, it can be retrieved from the requirement instance object
+
         if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
             logger.warning(f"User {user.id} tried to update requirements for project {project.project_id} without permission")
             raise PermissionDenied("You do not have permission to update requirements for this project.")

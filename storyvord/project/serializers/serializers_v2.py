@@ -73,7 +73,7 @@ class ProjectDetailsSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = ProjectDetails
-        fields = ['project_id', 'owner', 'members', 'name', 'content_type', 'brief', 'additional_details', 'created_at', 'updated_at']
+        fields = ['project_id', 'owner', 'members', 'name', 'content_type', 'brief', 'additional_details','status','created_at', 'updated_at']
 
     def create(self, validated_data):
         user = self.context['request'].user
