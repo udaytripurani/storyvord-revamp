@@ -149,8 +149,8 @@ class ProjectDetails(models.Model):
     members = models.ManyToManyField(Membership, related_name='project_members', blank=True)
     name = models.CharField(max_length=255)
     content_type = models.CharField(max_length=256)
-    brief = models.TextField()
-    additional_details = models.TextField()
+    brief = models.TextField() #TODO Word Limit
+    additional_details = models.TextField() #TODO Word Limit
     status = models.CharField(max_length=30, choices=StatusChoices.choices, default=StatusChoices.PLANNING)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

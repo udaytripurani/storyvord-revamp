@@ -8,7 +8,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
 from django.db.models import Q
-from accounts.models import Permission as AccountPermission
+from accounts.models import Permission as AccountPermission, PersonalInfo
+from client.models import ClientProfile
+from crew.models import CrewProfile
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, ProjectInvite,
     Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,ProjectAISuggestions
@@ -16,7 +18,7 @@ from ..models import (
 from decimal import Decimal , InvalidOperation
 from ..serializers.serializers_v2 import (
     ProjectDetailsSerializer, ProjectInviteSerializer, ProjectRequirementsSerializer, ShootingDetailsSerializer, 
-    RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer
+    RoleSerializer, MembershipSerializer,ProjectAISuggestionsSerializer, PersonalInfoSerializer , CrewProfileSerializer, ClientProfileSerializer
 )
 import uuid
 from django.http import JsonResponse
@@ -409,11 +411,106 @@ class MembershipViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return Membership.objects.filter(
-            Q(project=self.request.query_params.get('project_id'))&
-            Q(project__owner=self.request.user)&
-            Q(project__memberships__user=self.request.user)
-        ).distinct()
+        try:
+            return Membership.objects.filter(
+                Q(project=self.request.query_params.get('project_id'))&
+                Q(project__owner=self.request.user)&
+                Q(project__memberships__user=self.request.user)
+            ).distinct()
+        except Exception as e:
+            logger.error(f"Error occurred while fetching memberships for user {self.request.user}. Error: {e}")
+            raise e
+    
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = self.get_serializer(queryset, many=True)
+            serialized_data = []
+
+            for membership in queryset:
+                membership_data = {
+                    "membership_id": membership.id,
+                    "project_id": membership.project.project_id if membership.project else None,
+                    "created_at": membership.created_at,
+                    "user": {}
+                }
+
+                # User details
+                user = membership.user
+                membership_data["user"]["id"] = user.id
+                membership_data["user"]["email"] = user.email
+
+                # Personal Info
+                try:
+                    personal_info = PersonalInfo.objects.get(user=user)
+                    membership_data["user"]["personal_info"] = {
+                        "full_name": personal_info.full_name,
+                        "contact_number": personal_info.contact_number,
+                        "location": personal_info.location,
+                        "languages": personal_info.languages,
+                        "job_title": personal_info.job_title,
+                        "bio": personal_info.bio,
+                        "image": personal_info.image.url if personal_info.image and personal_info.image.name else None,
+                    }
+                except PersonalInfo.DoesNotExist:
+                    membership_data["user"]["personal_info"] = None
+
+                # Client Profile
+                if user.user_type_id == 1:
+                    try:
+                        client_profile = ClientProfile.objects.get(user=user)
+                        membership_data["user"]["client_profile"] = {
+                            "role": client_profile.role,
+                            "address": client_profile.address,
+                            "personal_website": client_profile.personalWebsite,
+                            "drive": client_profile.drive,
+                            "active": client_profile.active,
+                        }
+                    except ClientProfile.DoesNotExist:
+                        membership_data["user"]["client_profile"] = None
+
+                # Crew Profile
+                elif user.user_type_id == 2:
+                    try:
+                        crew_profile = CrewProfile.objects.get(user=user)
+                        membership_data["user"]["crew_profile"] = {
+                            "experience": crew_profile.experience,
+                            "skills": crew_profile.skills,
+                            "standard_rate": crew_profile.standardRate,
+                            "technical_proficiencies": crew_profile.technicalProficiencies,
+                            "specializations": crew_profile.specializations,
+                            "drive": crew_profile.drive,
+                            "active": crew_profile.active,
+                        }
+                    except CrewProfile.DoesNotExist:
+                        membership_data["user"]["crew_profile"] = None
+
+                # Role Information
+                if membership.role:
+                    membership_data["role"] = {
+                        "name": membership.role.name,
+                        "description": membership.role.description,
+                        "is_global": membership.role.is_global,
+                        "permissions": [permission.name for permission in membership.role.permission.all()]
+                    }
+                else:
+                    membership_data["role"] = None
+
+                # Append the membership data to the final list
+                serialized_data.append(membership_data)
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Memberships retrieved successfully",
+                "data": serialized_data,
+            },
+            status=status.HTTP_200_OK,
+        )
     
     def create(self, request, *args, **kwargs):
         data = request.data
