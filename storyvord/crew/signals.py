@@ -5,8 +5,8 @@ from django.conf import settings
 from .models import CrewProfile
 
 
-@receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        CrewProfile.objects.create(user=instance)
+# @receiver(post_save, sender=settings.AUTH_USER_MODEL)
+# def create_user_profile(sender, instance, created, **kwargs):
+    # if created:
+        # CrewProfile.objects.create(user=instance)
     
