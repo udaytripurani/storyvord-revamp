@@ -131,7 +131,10 @@ class ProjectAISuggestionsSerializer(serializers.ModelSerializer):
         model = ProjectAISuggestions
         fields = '__all__'
         
+        
 class ProjectInviteSerializer(serializers.ModelSerializer):
+    project = serializers.PrimaryKeyRelatedField(queryset=ProjectDetails.objects.all())
+    
     class Meta:
         model = ProjectInvite
         fields = '__all__'

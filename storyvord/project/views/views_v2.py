@@ -175,12 +175,44 @@ class GetInvitesView(APIView):
 
     def get(self, request):
         try:
+            # Fetch all invites for the authenticated user
             invites = ProjectInvite.objects.filter(invitee=request.user)
+            if not invites.exists():
+                return Response({'status': 'success', 'message': 'No invites found', 'data': []}, status=status.HTTP_200_OK)
+
+            # Serialize the invites
             serializer = ProjectInviteSerializer(invites, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+
+            # Group invites by project and fetch project details
+            project_data = {}
+            for invite in serializer.data:
+                project_id = invite['project']
+                if project_id not in project_data:
+                    # Fetch project details for the current project
+                    project = ProjectDetails.objects.get(project_id=project_id)
+                    project_data[project_id] = {
+                        'project_id': project.project_id,
+                        'project_name': project.name,
+                        'project_status': project.status,
+                        'created_at': project.created_at,
+                        'invites': []
+                    }
+                # Add invite details to the project
+                project_data[project_id]['invites'].append(invite)
+
+            # Convert the project data dictionary to a list
+            response_data = list(project_data.values())
+
+            return Response({
+                'status': 'success',
+                'message': 'Invites retrieved successfully',
+                'data': response_data
+            }, status=status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"Unexpected error occurred while {request.user.id} tried to get invites. Error: {e}")
-
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
     queryset = ProjectRequirements.objects.all()
