@@ -45,7 +45,6 @@ class FolderListView(APIView):
             }
             return Response(data)
         except Exception as exc:
-            print(exc)
             response = custom_exception_handler(exc, self.get_renderer_context())
             return response
 

@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 
 from client.models import ClientProfile
-from project.models import Project
+from project.models import ProjectDetails
 
 # Create your models here.
 class ProjectInvitation(models.Model):
@@ -12,7 +12,7 @@ class ProjectInvitation(models.Model):
         ('rejected', 'Rejected'),
     ]
     
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     firstName = models.CharField(max_length=100, blank=True, null=True)
     lastName = models.CharField(max_length=100, blank=True, null=True)
     message = models.TextField(blank=True, null=True)
