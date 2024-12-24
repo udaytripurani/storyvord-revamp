@@ -9,6 +9,8 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from .models import User
 import jwt
 
+#TODO Make a seperate notification system for email verification which is not depend of a particular app.
+
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     return {

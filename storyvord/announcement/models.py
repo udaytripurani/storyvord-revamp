@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Create your models here.
+#TODO Check if we are using it, delete if not
 class Announcement(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     title = models.CharField(max_length=255, null=True, blank=True)

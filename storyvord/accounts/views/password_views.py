@@ -9,6 +9,12 @@ from ..serializers.serializers_v2 import ResetPasswordEmailRequestSerializer, Se
 from accounts.utils import send_password_reset_email, EmailThread
 from accounts.models import User
 
+#TODO:
+# 1. Change the password reset token generator to something that is not the default one in django
+# 2. Add a check to make sure that the user is active
+# 3. Add a check to make sure that the user is not banned
+# 4. Add a check to make sure that the user has not already used the token
+
 class RequestPasswordResetEmailAPIView(generics.GenericAPIView):
     serializer_class = ResetPasswordEmailRequestSerializer
 
@@ -50,3 +56,4 @@ class SetNewPasswordAPIView(generics.GenericAPIView):
         return Response({
             "message": "Password reset successful"
         }, status=status.HTTP_200_OK)
+

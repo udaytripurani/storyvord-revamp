@@ -152,37 +152,3 @@ def generate_report(report_type,project_details,shooting_details):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
-def generate_report_v2(report_type,project_details,shooting_details):
-    try:
-        # Generate the prompt
-        prompt = generate_prompt(report_type,project_details,shooting_details)
-
-        if prompt == "Invalid report type.":
-            return JsonResponse({"error": "Invalid report type."}, status=400)
-
-        completion = client.chat.completions.create(
-            model=deployment,
-            messages=[
-                {"role": "system", "content": f"I need you to act as a line producer with expertise in local locations, compliance issues, and cultural nuances. You have a strong understanding of the risks involved in film production, especially related to location-specific factors."
-                    f"You are also skilled in budgeting for films, including compliance costs, and creating detailed itineraries to ensure compliance."
-                    f"Your knowledge covers locations worldwide, from big cities to small towns in every country."
-                    f"Given this expertise, provide advice using critical thinking based on further details I will provide"},
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            max_tokens=800,
-            temperature=0.7,
-            top_p=0.95,
-            frequency_penalty=0,
-            presence_penalty=0,
-            stop=None,
-            stream=False
-        )
-        
-        generated_text = completion.choices[0].message.content
-        return generated_text
-    except Exception as exc:
-        return None
