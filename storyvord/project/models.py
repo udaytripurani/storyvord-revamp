@@ -202,6 +202,7 @@ class ProjectCrewRequirement(models.Model):
     crew_title = models.CharField(max_length=256, null=True, blank=True)
     quantity = models.PositiveIntegerField()
 
+#TODO Remove equipment requirement from everywhere
 class ProjectEquipmentRequirement(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     equipment_title = models.CharField(max_length=256, null=True, blank=True)

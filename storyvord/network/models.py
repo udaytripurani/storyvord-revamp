@@ -12,7 +12,7 @@ class Connection(models.Model):
     ]
 
     requester = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # Use the custom user model
+        settings.AUTH_USER_MODEL,  # Use the custom user model #TODO Use the User Model instead of AuthUser
         related_name="sent_requests",
         on_delete=models.CASCADE
     )

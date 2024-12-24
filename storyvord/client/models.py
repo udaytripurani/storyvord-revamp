@@ -15,7 +15,8 @@ class ClientProfile(models.Model):
 
     def __str__(self):
         return f'{self.user.email}'
-    
+
+#TODO Remove this country choice and get it from Account app
 COUNTRY_CHOICES = [
     ('AF', 'Afghanistan'),
     ('AL', 'Albania'),
