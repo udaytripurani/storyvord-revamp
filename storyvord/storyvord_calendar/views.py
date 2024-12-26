@@ -64,10 +64,14 @@ class EventView(APIView):
             else:
                 serializer = self.serializer_class(calendar.calendar_events.all(), many=True)
 
+            calendar_serializer = ProjectCalendarSerializer(calendar)
 
             data = {
                 'message': 'Success',
-                'data': serializer.data
+                'data': {
+                    'calendar': calendar_serializer.data,
+                    'events': serializer.data
+                }
             }
             return Response(data, status=status.HTTP_200_OK)
         except Exception as exc:
@@ -242,38 +246,22 @@ class UserHomeCalendarView(APIView):
         try:
             # Fetch the user's personal calendar and events
             user_calendar = get_object_or_404(UserCalender, user=request.user)
-            user_calendar_events = user_calendar.user_calendar_events.all()
+            user_calendar_serializer = UserCalendarSerializer(user_calendar)
 
             # Fetch all project calendars where the user is part of a membership
             project_calendars = ProjectCalendar.objects.filter(
                 project__memberships__user=request.user
             ).distinct()
 
-            # Fetch all events from the project calendars where the user is a participant
-            project_calendar_events = CalendarEvent.objects.filter(
-                participants__user=request.user
-            ).distinct()
-
-            # Serializing user calendar and its events
-            user_calendar_serializer = UserCalendarSerializer(user_calendar)
-            user_calendar_events_serializer = UserCalendarEventSerializer(user_calendar_events, many=True)
-
-            # Serializing project calendars and their events
+            # Serialize project calendars with events
             project_calendars_serializer = CalendarSerializer(project_calendars, many=True)
-            project_calendar_events_serializer = EventSerializer(project_calendar_events, many=True)
 
             # Combine all data in the response
             data = {
                 'message': 'Success',
                 'data': {
-                    'user_calendar': {
-                        'calendar': user_calendar_serializer.data,
-                        'events': user_calendar_events_serializer.data
-                    },
-                    'project_calendars': {
-                        'calendars': project_calendars_serializer.data,
-                        'events': project_calendar_events_serializer.data
-                    }
+                    'user_calendar': user_calendar_serializer.data,
+                    'project_calendars': project_calendars_serializer.data
                 }
             }
             return Response(data, status=status.HTTP_200_OK)
