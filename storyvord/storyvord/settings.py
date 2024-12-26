@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'ai_assistant',
     'chat',
     'network',
+    'creative_hub'
 
 
     'allauth',
