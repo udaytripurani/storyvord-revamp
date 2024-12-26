@@ -47,28 +47,17 @@ class EventSerializer(serializers.ModelSerializer):
         return participants
     
 class CalendarSerializer(serializers.ModelSerializer):
-    events = EventSerializer(many=True, read_only=True)
+    events = EventSerializer(many=True, read_only=True, source='calendar_events')
 
     class Meta:
         model = ProjectCalendar
-        # fields = '__all__'
         fields = ['id', 'name', 'project', 'events']
 
-    # def validate(self, data):
-    #     request = self.context.get('request')
-    #     if request and request.method in ['POST', 'PUT']:
-    #         project = data['project']
-    #         crew_profiles = project.crew_profiles.all()
-    #         client_profile = ClientProfile.objects.get(user=project.user)
-    #         employee_profiles = client_profile.employee_profile.all()
+class ProjectCalendarSerializer(serializers.ModelSerializer):
 
-    #         if request.user not in crew_profiles and not employee_profiles.filter(id=request.user.id).exists():
-    #             raise serializers.ValidationError(
-    #                 "You do not have permission to create or modify events in this calendar."
-    #             )
-
-    #     return data
-
+    class Meta:
+        model = ProjectCalendar
+        fields = '__all__'
 
 class UserCalendarEventSerializer(serializers.ModelSerializer):
     

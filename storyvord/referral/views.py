@@ -160,8 +160,6 @@ class AddEmployeeToClientProfileView(APIView):
         # Prepare new data dictionary with client_profile ID
         data = request.data.copy()  # Make a copy of the original data
         data['client_profile'] = client_profile.pk
-        print(data)
-        
         
         # Check if the employee is already working as an employee
         if ClientInvitation.objects.filter(employee_email=data['employee_email'], status='accepted').exists():
@@ -178,7 +176,12 @@ class AddEmployeeToClientProfileView(APIView):
         clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
         clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
         clientCompanyProfile.save()
-        return Response({'detail': 'Invitation sent.'}, status=status.HTTP_201_CREATED)
+
+        data = {
+            'message': 'Invitation sent.',
+            'data': serializer.data
+        }
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class AcceptClientInvitationView(APIView):
@@ -195,7 +198,15 @@ class AcceptClientInvitationView(APIView):
             clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
             clientCompanyProfile.save()
 
-            return Response({'detail': 'Invitation accepted and you have been added to the client profile.'}, status=status.HTTP_200_OK)
+            # Serialize the invitation data
+            serializer = ClientInvitationSerializer(invitation)
+
+            data = {
+                'message': 'Invitation accepted and you have been added to the client profile.',
+                'data': serializer.data
+            }
+
+            return Response(data, status=status.HTTP_200_OK)
         except ClientInvitation.DoesNotExist:
             return Response({'detail': 'Invitation not found or already processed.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -207,7 +218,14 @@ class RejectClientInvitationView(APIView):
             invitation = ClientInvitation.objects.get(referral_code=referral_code, status='pending')
             invitation.status = 'rejected'
             invitation.save()
-            return Response({'detail': 'Invitation rejected.'}, status=status.HTTP_200_OK)
+
+            serializer = ClientInvitationSerializer(invitation)
+            
+            data = {
+                'message': 'Invitation rejected.',
+                'data': serializer.data
+            }
+            return Response(data , status=status.HTTP_200_OK)
         except ClientInvitation.DoesNotExist:
             return Response({'detail': 'Invitation not found or already processed.'}, status=status.HTTP_400_BAD_REQUEST)
 
