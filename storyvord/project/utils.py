@@ -152,3 +152,40 @@ def generate_report(report_type,project_details,shooting_details):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+from django.core.mail import EmailMessage
+from django.template.loader import render_to_string
+from threading import Thread
+from django.conf import settings
+
+def send_invitation_email(user, project, role):
+    # Render the email body from the template
+    email_body = render_to_string('email/invitation.html', {
+        'user': user,
+        'project': project,
+        'role': role,
+    })
+    
+    # Default sender email (can be configured in settings)
+    from_email = f"Storyvord Platform <{getattr(settings, 'DEFAULT_FROM_EMAIL', 'DEFAULT_NO_REPLY_EMAIL')}>"
+
+    # Create the email message
+    email = EmailMessage(
+        subject=f"Invitation to join the project: {project.name}",
+        body=email_body,
+        from_email=from_email,
+        to=[user.email],
+    )
+    email.content_subtype = 'html'  # Set email content type to HTML
+
+    # Send the email asynchronously using a thread
+    EmailThread(email).start()
+
+
+class EmailThread(Thread):
+    def __init__(self, email):
+        self.email = email
+        Thread.__init__(self)
+
+    def run(self):
+        self.email.send()

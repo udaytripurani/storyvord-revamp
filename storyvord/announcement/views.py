@@ -266,6 +266,21 @@ class ProjectAnnouncementViewSet(viewsets.ModelViewSet):
             return Response({'message': 'Announcement not found.'}, status=404)
         except Exception as e:
             return Response({'message': 'An unexpected error occurred.'}, status=500)
+        
+    def put(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object(pk=self.kwargs['pk'])
+            serializer = ProjectAnnouncementSerializer(instance, data=request.data)
+            serializer.is_valid(exception=True)
+            announcement = serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except PermissionDenied as e:
+            return Response({'message': str(e)}, status=403)
+        except Http404:
+            return Response({'message': 'Announcement not found.'}, status=404)
+        except Exception as e:
+            return Response({'message': 'An unexpected error occurred.'}, status=500)
+        
 
     # def post(self, request, project_id):
     #     try:

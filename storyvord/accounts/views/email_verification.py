@@ -26,10 +26,10 @@ class VerifyEmail(APIView):
                 logger.info(f"Email for user {user.email} verified")
                 if PROD:
                     logger.info(f"Redirecting to production login")
-                    return HttpResponseRedirect(redirect_to="https://staging.storyvord.com/auth/sign-in")
+                    return HttpResponseRedirect(redirect_to="https://storyvord.io/auth/sign-in")
                 else:
                     logger.info(f"Redirecting to development login")
-                    return HttpResponseRedirect(redirect_to="https://dev.storyvord.com/auth/sign-in")
+                    return HttpResponseRedirect(redirect_to="https://storyvord.io/auth/sign-in")
             return Response({"message": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error verifying email: {str(e)}")

@@ -22,7 +22,7 @@ from ..serializers.serializers_v2 import (
 )
 import uuid
 from django.http import JsonResponse
-from project.utils import generate_report, project_ai_suggestion
+from project.utils import generate_report, project_ai_suggestion, send_invitation_email
 
 import logging
 logger = logging.getLogger(__name__)
@@ -78,25 +78,38 @@ class ProjectViewSet(viewsets.ModelViewSet):
             project = self.get_object()
             logger.info(f"User {self.request.user.id} trying to add member to project {project}")
             
-            user = request.data.get('user_id')
-            role = request.data.get('role_id')
+            # user = request.data.get('user_id')
+            # role = request.data.get('role_id')
             
-            if not user or not role:
+            user_id = request.data.get('user_id')
+            email = request.data.get('email')
+            role_id = request.data.get('role_id')
+            
+            if not role_id or (not user_id and not email):
                 logger.warning(f"User {self.request.user.id} tried to add member to project {project} with invalid data")
-                return Response({'error': 'User and Role are required'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Role and either User ID or Email are required'}, status=status.HTTP_400_BAD_REQUEST)
             
-            if Membership.objects.filter(project=project, user_id=user).exists():
-                    logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project} which is already a member")
+            # Check if inviting by user_id
+            if user_id:
+                if Membership.objects.filter(project=project, user_id=user_id).exists():
+                    logger.warning(f"User {self.request.user.id} tried to add member {user_id} to project {project} who is already a member")
                     return Response({'error': 'User is already a member of the project'}, status=status.HTTP_400_BAD_REQUEST)
+                invitee = get_object_or_404(User, id=user_id)
+                
+             # Check if inviting by email
+            elif email:
+                invitee, created = User.objects.get_or_create(email=email)
+                if not created and Membership.objects.filter(project=project, user=invitee).exists():
+                    logger.warning(f"User {self.request.user.id} tried to add member {email} to project {project} who is already a member")
+                    return Response({'error': 'User is already a member of the project'}, status=status.HTTP_400_BAD_REQUEST)
+
+            role = get_object_or_404(Role, id=role_id)
                 
             if request.user == project.owner or Membership.objects.filter(
                 project=project, 
                 user=request.user,
                 role__permission__name='add_members'
-            ).exists():
-                invitee = get_object_or_404(User, id=user)
-                role = get_object_or_404(Role, id=role)
-                
+            ).exists(): 
                 invite, created = ProjectInvite.objects.get_or_create(
                     project=project,
                     inviter=request.user,
@@ -104,14 +117,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     role=role,
                 )
                 if created:
-                    logger.info(f"User {request.user.id} successfully invited member {user} to project {project}")
+                    logger.info(f"User {request.user.id} successfully invited member {user_id} to project {project}")
+                    send_invitation_email(invitee, project, role)
                     return Response(
                         {
                             'message': 'Invitation sent successfully',
                             'data': model_to_dict(invite)
                         }, status=status.HTTP_201_CREATED)
                 else:
-                    logger.info(f"User {request.user.id} tried to re-invite member {user} to project {project} who already has a pending invite")
+                    logger.info(f"User {request.user.id} tried to re-invite member {user_id} to project {project} who already has a pending invite")
                     return Response(
                         {
                             'message': 'Invitation already exists',
@@ -124,7 +138,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                         }, status=status.HTTP_200_OK)
                 
             else:
-                logger.warning(f"User {self.request.user.id} tried to add member {user} to project {project} which they do not have permission for")
+                logger.warning(f"User {self.request.user.id} tried to add member {user_id} to project {project} which they do not have permission for")
                 raise PermissionDenied("You don't have permission to add members to this project.")
             
         except ProjectDetails.DoesNotExist:
@@ -205,7 +219,15 @@ class GetInvitesView(APIView):
                         'invite_id': invite['id'],
                         'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
                         'status': invite['status'],
-                        'updated_at': invite['updated_at']
+                        'updated_at': invite['updated_at'],
+                         'user_details':{
+                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
+                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
+                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
+                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
+                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
+                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
+                        }
                     })
 
             # If project_id is not passed, return all invites
@@ -225,7 +247,15 @@ class GetInvitesView(APIView):
                         'invite_id': invite['id'],
                         'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
                         'status': invite['status'],
-                        'updated_at': invite['updated_at']
+                        'updated_at': invite['updated_at'],
+                        'user_details':{
+                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
+                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
+                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
+                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
+                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
+                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
+                        }
                     })
 
             response_data = list(project_data.values())
