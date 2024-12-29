@@ -66,6 +66,7 @@ urlpatterns = [
     path('api/', include('ai_assistant.urls')),
     path('api/chat/', include('chat.urls')),
     path('api/network/', include('network.urls')),
+     path('api/', include('ticket.urls')),
 ]
 
 if settings.DEBUG:
