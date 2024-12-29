@@ -344,6 +344,107 @@ for log_subdir in [APPLICATION_LOG_DIR, REQUEST_LOG_DIR, ERROR_LOG_DIR, DB_INFO_
         os.makedirs(log_subdir)
 
 # Logging Configuration
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'filters': {
+#         'exclude_autoreload': {
+#             '()': 'storyvord.logging_middleware.ExcludeAutoreloadFilter',
+#         },
+#     },
+#     'formatters': {
+#         'verbose': {
+#             'format': '{levelname} {asctime} {module} {message}',
+#             'style': '{',
+#         },
+#         'simple': {
+#             'format': '{levelname} {message}',
+#             'style': '{',
+#         },
+#     },
+#     'handlers': {
+#         'application_file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(APPLICATION_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+#             'formatter': 'verbose',
+#             'filters': ['exclude_autoreload'],
+#             'maxBytes': 1024 * 1024 * 5,  # 5 MB
+#             'backupCount': 5,
+#         },
+#         'request_file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(REQUEST_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+#             'formatter': 'verbose',
+#             'maxBytes': 1024 * 1024 * 5,  # 5 MB
+#             'backupCount': 5,
+#         },
+#         'error_file': {
+#             'level': 'ERROR',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(ERROR_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+#             'formatter': 'verbose',
+#             'maxBytes': 1024 * 1024 * 5,  # 5 MB
+#             'backupCount': 5,
+#         },
+#         'db_info_file': {  
+#             'level': 'DEBUG',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(DB_INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'), 
+#             'formatter': 'verbose',
+#             'maxBytes': 1024 * 1024 * 5,  # 5 MB
+#             'backupCount': 5,
+#         },
+#         'info_file': {  # New handler for INFO logs
+#             'level': 'INFO',
+#             'class': 'logging.handlers.RotatingFileHandler',
+#             'filename': os.path.join(INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+#             'formatter': 'verbose',
+#             'maxBytes': 1024 * 1024 * 5,  # 5 MB
+#             'backupCount': 5,
+#         },
+#     },
+#     'loggers': {
+#         'django': {
+#             'handlers': ['application_file', 'info_file'],  # Add info_file handler
+#             'level': 'DEBUG',
+#             'propagate': True,
+#         },
+#         'django.request': {
+#             'handlers': ['request_file'],
+#             'level': 'DEBUG',
+#             'propagate': False,
+#         },
+#         'django.db.backends': {
+#             'handlers': ['db_info_file'],
+#             'level': 'DEBUG',
+#             'propagate': False,
+#         },
+#         'rest_framework': {
+#             'handlers': ['request_file'],
+#             'level': 'DEBUG',
+#             'propagate': False,
+#         },
+#         'django.utils.autoreload': {
+#             'handlers': ['application_file'],
+#             'level': 'WARNING',
+#             'propagate': False,
+#         },
+#         'errors': {  # Logger for errors
+#             'handlers': ['error_file'],
+#             'level': 'ERROR',
+#             'propagate': False,
+#         },
+#         'info': {  # Logger for INFO logs
+#             'handlers': ['info_file'],
+#             'level': 'INFO',
+#             'propagate': False,
+#         },
+#     },
+# }
+
+# Logging Configuration
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -366,7 +467,7 @@ LOGGING = {
         'application_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(APPLICATION_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+            'filename': os.path.join(APPLICATION_LOG_DIR, 'application.log'),
             'formatter': 'verbose',
             'filters': ['exclude_autoreload'],
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
@@ -375,7 +476,7 @@ LOGGING = {
         'request_file': {
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(REQUEST_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+            'filename': os.path.join(REQUEST_LOG_DIR, 'request.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -383,7 +484,7 @@ LOGGING = {
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(ERROR_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+            'filename': os.path.join(ERROR_LOG_DIR, 'error.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -391,15 +492,15 @@ LOGGING = {
         'db_info_file': {  
             'level': 'DEBUG',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(DB_INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'), 
+            'filename': os.path.join(DB_INFO_LOG_DIR, 'db_info.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
         },
-        'info_file': {  # New handler for INFO logs
+        'info_file': {  
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(INFO_LOG_DIR, f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log'),
+            'filename': os.path.join(INFO_LOG_DIR, 'info.log'),
             'formatter': 'verbose',
             'maxBytes': 1024 * 1024 * 5,  # 5 MB
             'backupCount': 5,
@@ -407,7 +508,7 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['application_file', 'info_file'],  # Add info_file handler
+            'handlers': ['application_file', 'info_file'],
             'level': 'DEBUG',
             'propagate': True,
         },
@@ -431,12 +532,12 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
-        'errors': {  # Logger for errors
+        'errors': {  
             'handlers': ['error_file'],
             'level': 'ERROR',
             'propagate': False,
         },
-        'info': {  # Logger for INFO logs
+        'info': {  
             'handlers': ['info_file'],
             'level': 'INFO',
             'propagate': False,
