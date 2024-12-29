@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.core.mail import send_mail
 from django.conf import settings
 
-from client.models import ClientProfile
+from client.models import ClientProfile, ClientCompanyProfile
 from project.models import ProjectDetails  # Update import for ProjectDetails
 from .models import ClientInvitation, ProjectInvitation
 from django.contrib.auth import get_user_model
@@ -236,10 +236,22 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class ClientInvitationSerializer(serializers.ModelSerializer):
     client_profile = ProfileSerializer(read_only=True)
+    employee_user = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientInvitation
         fields = '__all__'
+
+    def get_employee_user(self, obj):
+        try:
+            user = User.objects.get(email=obj.employee_email)
+            return {
+                'id': user.id,
+                'email': user.email,
+            }
+
+        except User.DoesNotExist:
+            return None
 
 
     def create(self, validated_data):
@@ -271,8 +283,9 @@ class ClientInvitationSerializer(serializers.ModelSerializer):
                 self.send_existing_user_invitation_email(employee_email, client_profile, invitation, request)
             else:
                 self.send_new_user_registration_email(employee_email, client_profile, referral_code, request)
-            client_profile.employee_profile.add(user_exists)  # Update to add user to employee_profile
-            client_profile.save()
+            clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
+            clientCompanyProfile.employee_profile.add(user_exists)  # Update to add user to employee_profile
+            clientCompanyProfile.save()
         return invitation
 
     def send_existing_user_invitation_email(self, employee_email, client_profile, invitation, request):
@@ -378,8 +391,12 @@ class EmployeeRegisterWithReferralSerializer(serializers.Serializer):
 
         # Add user to the client profile's employee_profile
         client_profile = ClientProfile.objects.get(id=client_profile_id)
-        client_profile.employee_profile.add(user)
-        client_profile.save()
+        # client_profile.employee_profile.add(user)
+        # client_profile.save()
+
+        clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
+        clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
+        clientCompanyProfile.save()
 
         # Mark the invitation as accepted
         invitation = ClientInvitation.objects.get(referral_code=referral_code, client_profile=client_profile)
