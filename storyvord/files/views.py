@@ -168,7 +168,7 @@ class FileListCreateView(APIView):
             # Check if the file with same name exists
             if File.objects.filter(folder=pk, name=request.data.get('name')).exists():
                 # return Response({"detail": "File with the same name already exists."}, status=status.HTTP_400_BAD_REQUEST)
-                raise Warning('File with the same name already exists.')
+                raise PermissionError('File with the same name already exists.')
 
             # Make a mutable copy of request.data
             data = request.data.copy()
