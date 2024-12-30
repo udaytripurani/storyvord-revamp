@@ -268,19 +268,18 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-if PROD:
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.azure_storage.AzureStorage",
-            "OPTIONS": {
-            'timeout': 20,
-            'expiration_secs': 500,
-            },
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        "OPTIONS": {
+        'timeout': 20,
+        'expiration_secs': 500,
         },
-        "staticfiles": {
-            "BACKEND": "storages.backends.azure_storage.AzureStorage",
-        },
-    }
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+    },
+}
 
 AZURE_CONTAINER=os.getenv('AZURE_CONTAINERS')
 AZURE_ACCOUNT_NAME=os.getenv('AZURE_ACCOUNT_NAMES')
