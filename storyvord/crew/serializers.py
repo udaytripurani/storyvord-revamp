@@ -3,14 +3,27 @@ from rest_framework import serializers
 from project.models import Project
 from .models import *
 from storyvord.utils import Base64FileField
+from accounts.models import User, PersonalInfo
+
+class PersonalInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PersonalInfo
+        fields = '__all__'
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email' ]
 
 class CrewProfileSerializer(serializers.ModelSerializer):
     image = Base64FileField(required=False, allow_null=True)
+    user = UserSerializer(read_only=True)
+    personal_info = PersonalInfoSerializer(read_only=True)
     class Meta:
         # Base 64 image
         model = CrewProfile
         fields = '__all__'
-        read_only_fields = ('user',)
+        read_only_fields = ('user', 'personal_info')
 
 class CrewCreditsSerializer(serializers.ModelSerializer):
     class Meta:

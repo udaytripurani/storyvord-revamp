@@ -2,84 +2,270 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import Calendar, Event
-from .serializers import CalendarSerializer, EventSerializer
+from .models import *
+from .serializers import *
+from project.models import Membership, ProjectDetails
 from rest_framework.permissions import IsAuthenticated
 from client.models import ClientProfile
+from storyvord.exception_handlers import custom_exception_handler
 
 class CalendarView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = CalendarSerializer
 
     def get(self, request, project_id=None):
-        if project_id:
-            calendar = get_object_or_404(Calendar, project=project_id)
-            serializer = self.serializer_class(calendar)
-        else:
-            calendars = Calendar.objects.filter(
-                project__crew_profiles=request.user
-            ).distinct() | Calendar.objects.filter(
-                project__user=request.user
-            ).distinct()
+        try:
+            if project_id:
+                calendar = get_object_or_404(ProjectCalendar, project=project_id)
+                serializer = self.serializer_class(calendar)
+            else:
+                # RBAC
+                calendars = ProjectCalendar.objects.filter(
+                    project__memberships__user = request.user
+                ).distinct()
 
-            serializer = self.serializer_class(calendars, many=True)
-        return Response(serializer.data)
+                serializer = self.serializer_class(calendars, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class EventView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EventSerializer
+
+    def check_rbac(self, user, project, permission_name):
+        membership = get_object_or_404(Membership, user=user, project=project)
+        if not membership.role.permission.filter(name=permission_name).exists():
+            return False
+        return True
+
     def get(self, request, project_id, pk=None):
-        calendar = get_object_or_404(Calendar, project=project_id)
-
-        user_is_crew = calendar.project.crew_profiles.filter(pk=request.user.pk).exists()
-        user_is_creator = calendar.project.user == request.user
-        client_profile = ClientProfile.objects.get(user=calendar.project.user)
-        user_is_employee = client_profile.employee_profile.filter(pk=request.user.pk).exists()
- 
-        if not (user_is_crew or user_is_creator or user_is_employee):
-            return Response(status=status.HTTP_403_FORBIDDEN, data={"detail": "You do not have permission to access this calendar"})
-        if pk:
-            event = get_object_or_404(Event, pk=pk, calendar=calendar)
-            if not (event.participants.filter(pk=request.user.pk).exists() or user_is_creator):
-                return Response(status=status.HTTP_403_FORBIDDEN, data={"detail": "You do not have permission to access this event"})
-            serializer = EventSerializer(event)
-        else:
-            if user_is_creator:
-                events = calendar.events.all()
-            else:
-                events = calendar.events.filter(participants=request.user)
-
-            # Debugging: Log the queryset to see if it's empty
-            if not events.exists():
-                return Response({"detail": "No events found for this user"}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            calendar = get_object_or_404(ProjectCalendar, project=project_id)
             
-            serializer = EventSerializer(events, many=True)
+            # membership = get_object_or_404(Membership, user=request.user, project=calendar.project)
+            # print(membership.role.permission.all())
+            # if not membership.role.permission.filter(name='view_calander').exists():
+                # raise PermissionError('You do not have permission to view this calendar')
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            # RBAC
+            if not self.check_rbac(request.user, calendar.project, 'view_calander_event'):
+                raise PermissionError('You do not have permission to view this calendar')
+            
+            
+            if pk:
+                serializer = self.serializer_class(get_object_or_404(CalendarEvent, pk=pk, calendar=calendar))
+                
+            else:
+                serializer = self.serializer_class(calendar.calendar_events.all(), many=True)
+
+            calendar_serializer = ProjectCalendarSerializer(calendar)
+
+            data = {
+                'message': 'Success',
+                'data': {
+                    'calendar': calendar_serializer.data,
+                    'events': serializer.data
+                }
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            print(exc)
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request, project_id):
-        calendar = get_object_or_404(Calendar, project=project_id)
-        data = request.data.copy()
-        data['calendar'] = calendar.id 
-        serializer = self.serializer_class(data=data, context={'request': request})
-        if serializer.is_valid():
+        try:
+            calendar = get_object_or_404(ProjectCalendar, project=project_id)
+
+            # RBAC
+            if not self.check_rbac(request.user, calendar.project, 'create_calander_event'):
+                raise PermissionError('You do not have permission to create this calendar event')
+
+            # Prepare data for the serializer
+            data = request.data.copy()
+            data['calendar'] = calendar.id
+            data['project'] = project_id
+
+            # Pass data to the serializer
+            serializer = self.serializer_class(data=data, context={'request': request})
+
+            # Validate and save the event
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
+            data['participants'] = [Membership.objects.get(id=participant_id).id for participant_id in data['participants']]
+
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            response_data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, project_id, pk):
-        calendar = get_object_or_404(Calendar, project=project_id)
-        event = get_object_or_404(Event, pk=pk, calendar=calendar)
-        data = request.data.copy()
-        data['calendar'] = calendar.id 
-        serializer = self.serializer_class(event, data=data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            calendar = get_object_or_404(ProjectCalendar, project=project_id)
 
+            # RBAC
+            if not self.check_rbac(request.user, calendar.project, 'edit_calander_event'):
+                raise PermissionError('You do not have permission to edit this calendar event')
+
+            event = get_object_or_404(CalendarEvent, pk=pk, calendar=calendar)
+            data = request.data.copy()
+            data['calendar'] = calendar.id
+            data['project'] = project_id
+            serializer = self.serializer_class(event, data=data, context={'request': data})
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
+            data['participants'] = [Membership.objects.get(id=participant_id).id for participant_id in data['participants']]
+
+            serializer.save()
+            response_data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(response_data)
+
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+        
     def delete(self, request, project_id, pk):
-        calendar = get_object_or_404(Calendar, project=project_id)
-        event = get_object_or_404(Event, pk=pk, calendar=calendar)
-        event.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        try:
+            calendar = get_object_or_404(ProjectCalendar, project=project_id)
+
+            # RBAC
+            if not self.check_rbac(request.user, calendar.project, 'delete_calander_event'):
+                raise PermissionError('You do not have permission to delete this calendar events')
+            
+            event = get_object_or_404(CalendarEvent, pk=pk, calendar=calendar)
+            event.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+    
+    
+class UserCalendarView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserCalendarSerializer
+
+    
+    def get(self, request):
+        try:
+            # Get or create user calendar
+            user_calendar, _ = UserCalender.objects.get_or_create(user=request.user)
+            serializer = self.serializer_class(user_calendar)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            print(exc)
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+        
+
+        
+class UserCalendarEventView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserCalendarEventSerializer
+
+    def post(self, request):    
+        try:
+            user_calendar = get_object_or_404(UserCalender, user=request.user)
+            data = request.data.copy()
+            data['calendar'] = user_calendar.id
+            data['user'] = request.user.id 
+            print(data)
+            serializer = self.serializer_class(data=data, context={'request': data})
+            # serializer.is_valid(exception=True)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            print(exc)
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
+    def put(self, request, pk):
+        try:
+            user_calendar = get_object_or_404(UserCalender, user=request.user)
+            event = get_object_or_404(UserCalendarEvent, pk=pk, calendar=user_calendar)
+            data = request.data.copy()
+            data['calendar'] = user_calendar.id 
+            serializer = self.serializer_class(event, data=data, context={'request': data})
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            serializer.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+        
+    def delete(self, request, pk):
+        try:
+            user_calendar = get_object_or_404(UserCalender, user=request.user)
+            event = get_object_or_404(UserCalendarEvent, pk=pk, calendar=user_calendar)
+            event.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            print(exc)
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+        
+
+        
+
+# User Calander View of all events of calander and user calander  
+class UserHomeCalendarView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Fetch the user's personal calendar and events
+            user_calendar = get_object_or_404(UserCalender, user=request.user)
+            user_calendar_serializer = UserCalendarSerializer(user_calendar)
+
+            # Fetch all project calendars where the user is part of a membership
+            project_calendars = ProjectCalendar.objects.filter(
+                project__memberships__user=request.user
+            ).distinct()
+
+            # Serialize project calendars with events
+            project_calendars_serializer = CalendarSerializer(project_calendars, many=True)
+
+            # Combine all data in the response
+            data = {
+                'message': 'Success',
+                'data': {
+                    'user_calendar': user_calendar_serializer.data,
+                    'project_calendars': project_calendars_serializer.data
+                }
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            print(f"Error: {exc}")
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response

@@ -2,19 +2,28 @@ from rest_framework import serializers
 from django.core.mail import send_mail
 from django.conf import settings
 
-from client.models import ClientProfile
-from .models import ClientInvitation, Project, ProjectInvitation
+from client.models import ClientProfile, ClientCompanyProfile
+from project.models import ProjectDetails  # Update import for ProjectDetails
+from .models import ClientInvitation, ProjectInvitation
 from django.contrib.auth import get_user_model
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.sites.models import Site
 from client.serializers import ProfileSerializer
+from accounts.models import User, PersonalInfo
 import uuid
 
 User = get_user_model()
 
+
+class UserSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'user_type', 'personalInfo']
+
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Project
+        model = ProjectDetails
         fields = '__all__'
 
 class ProjectInvitationSerializer(serializers.ModelSerializer):
@@ -39,9 +48,12 @@ class ProjectInvitationSerializer(serializers.ModelSerializer):
             request = self.context.get('request')  # Access the request from context
             user_exists = User.objects.filter(email=crew_email).exists()
             if user_exists:
+                user = User.objects.get(email=crew_email)
                 self.send_existing_user_invitation_email(crew_email, project, invitation, request)
             else:
-                self.send_new_user_registration_email(crew_email, project, referral_code, request)
+                user = self.send_new_user_registration_email(crew_email, project, referral_code, request)
+            project.members.add(user)  # Update to add user to project members
+            project.save()
         return invitation
 
     def get_site_info(self, request):
@@ -128,7 +140,7 @@ class InvitationRequestSerializer(serializers.Serializer):
         message = validated_data['message']
         print(crew_email, project_id)
         try:
-            project = Project.objects.get(project_id=project_id)
+            project = ProjectDetails.objects.get(project_id=project_id)
             print(project)
             invitation_data = {
                 'project': project.project_id,
@@ -142,7 +154,7 @@ class InvitationRequestSerializer(serializers.Serializer):
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return serializer.data
-        except Project.DoesNotExist:
+        except ProjectDetails.DoesNotExist:
             raise serializers.ValidationError('Project does not exist.')
 
 class RegisterWithReferralSerializer(serializers.Serializer):
@@ -154,8 +166,8 @@ class RegisterWithReferralSerializer(serializers.Serializer):
         referral_code = data.get('referral_code')
 
         try:
-            project = Project.objects.get(project_id=project_id)
-        except Project.DoesNotExist:
+            project = ProjectDetails.objects.get(project_id=project_id)
+        except ProjectDetails.DoesNotExist:
             raise serializers.ValidationError('Project does not exist.')
 
         try:
@@ -173,20 +185,22 @@ class RegisterWithReferralSerializer(serializers.Serializer):
         user_data = {
             'email': self.context['request'].data.get('email'),
             'password': self.context['request'].data.get('password'),
-            'user_type': 'crew',
+            'user_type': '2',
         }
         user_serializer = UserCreateSerializer(data=user_data)
         user_serializer.is_valid(raise_exception=True)
         user = user_serializer.save()
 
         # Add user to the project
-        project = Project.objects.get(project_id=project_id)
+        project = ProjectDetails.objects.get(project_id=project_id)
         project.crew_profiles.add(user)
+        project.members.add(user)  # Update to add user to project members
+        project.save()
 
         return user
 
 class UserCreateSerializer(serializers.ModelSerializer):
-    user_type = 'crew'
+    user_type = '2'
     class Meta:
         model = User
         fields = ('email', 'password', 'user_type')
@@ -207,70 +221,38 @@ class UserSerializer(serializers.ModelSerializer):
 class ListProjectInvitationSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source='project.name', read_only=True)
     
-    # Custom field to include invited user details if the user exists
-    invited_user = serializers.SerializerMethodField()
-    inviter_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectInvitation
-        fields = ['id', 'project', 'project_name', 'status', 'referral_code', 'created_at', 'firstName', 'lastName', 'message', 'crew_email', 'invited_user', 'inviter_profile']
-
-    def get_invited_user(self, obj):
-        # Look up the user based on the crew_email field
-        try:
-            user = User.objects.get(email=obj.crew_email)
-            return UserSerializer(user).data  # Return serialized user data if found
-        except User.DoesNotExist:
-            return None  # Return None if no user exists for this email
-    
-    def get_inviter_profile(self, obj):
-        client_profile = ClientProfile.objects.filter(user=obj.project.user).first()  # Get the profile of the project owner
-        if client_profile:
-            return {
-                "firstName": client_profile.firstName,
-                "lastName": client_profile.lastName,
-                "role": client_profile.role,
-                "description": client_profile.description,
-                "countryName": client_profile.countryName,
-                "locality": client_profile.locality,
-                "phone_number": client_profile.phone_number,
-                "personalWebsite": client_profile.personalWebsite,
-                "image": client_profile.image.url if client_profile.image else None,
-            }
-        return None
+        # fields = ['id', 'project', 'project_name', 'status', 'referral_code', 'created_at', 'firstName', 'lastName', 'message', 'crew_email', 'invited_user', 'inviter_profile']
+        fields = '__all__'
 
 class ProfileSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
     class Meta:
         model = ClientProfile
-        fields = ['firstName', 'lastName', 'role', 'description', 'countryName', 'locality', 'phone_number', 'personalWebsite', 'image']
+        fields = '__all__'  
 
 
 class ClientInvitationSerializer(serializers.ModelSerializer):
     client_profile = ProfileSerializer(read_only=True)
-
-    # Custom field to include invited user details if the user exists
-    invited_user = serializers.SerializerMethodField()
-    inviter_profile = serializers.SerializerMethodField()
+    employee_user = serializers.SerializerMethodField()
 
     class Meta:
         model = ClientInvitation
         fields = '__all__'
 
-    def get_invited_user(self, obj):
-        # Look up the user based on the employee_email field
+    def get_employee_user(self, obj):
         try:
             user = User.objects.get(email=obj.employee_email)
-            return UserSerializer(user).data  # Return serialized user data if found
+            return {
+                'id': user.id,
+                'email': user.email,
+            }
+
         except User.DoesNotExist:
-            return None  # Return None if no user exists for this email
-        
-    def get_inviter_profile(self, obj):
-        # Retrieve the ClientProfile for the client who sent the invitation
-        client_profile = obj.client_profile
-        if client_profile:
-            return ProfileSerializer(client_profile).data
-        return None
-    
+            return None
+
 
     def create(self, validated_data):
         # client_profile_id = validated_data.get('client_profile')
@@ -301,6 +283,9 @@ class ClientInvitationSerializer(serializers.ModelSerializer):
                 self.send_existing_user_invitation_email(employee_email, client_profile, invitation, request)
             else:
                 self.send_new_user_registration_email(employee_email, client_profile, referral_code, request)
+            clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
+            clientCompanyProfile.employee_profile.add(user_exists)  # Update to add user to employee_profile
+            clientCompanyProfile.save()
         return invitation
 
     def send_existing_user_invitation_email(self, employee_email, client_profile, invitation, request):
@@ -398,7 +383,7 @@ class EmployeeRegisterWithReferralSerializer(serializers.Serializer):
         user_data = {
             'email': self.context['request'].data.get('email'),
             'password': self.context['request'].data.get('password'),
-            'user_type': 'client'
+            'user_type': '1'
         }
         user_serializer = EmployeeUserCreateSerializer(data=user_data)
         user_serializer.is_valid(raise_exception=True)
@@ -406,7 +391,12 @@ class EmployeeRegisterWithReferralSerializer(serializers.Serializer):
 
         # Add user to the client profile's employee_profile
         client_profile = ClientProfile.objects.get(id=client_profile_id)
-        client_profile.employee_profile.add(user)
+        # client_profile.employee_profile.add(user)
+        # client_profile.save()
+
+        clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
+        clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
+        clientCompanyProfile.save()
 
         # Mark the invitation as accepted
         invitation = ClientInvitation.objects.get(referral_code=referral_code, client_profile=client_profile)

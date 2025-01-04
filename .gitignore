@@ -150,6 +150,7 @@ dist/
 .DS_Store
 Thumbs.db
 *.swp
-
-#log file
-logs/
+*.json
+*/media
+*/staticfiles
+*/logs

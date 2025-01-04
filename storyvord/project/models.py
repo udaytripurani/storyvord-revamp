@@ -35,6 +35,7 @@ class SelectCrew(models.Model):
     quantity = models.PositiveIntegerField(null=True, blank=True)
     
     def __srt__(self):
+        
         return self.title
 
 class SelectEquipment(models.Model):
@@ -100,7 +101,160 @@ class Project(models.Model):
 
 class OnboardRequest(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, limit_choices_to={'user_type': 'crew'})
+    user = models.ForeignKey(User, on_delete=models.CASCADE, limit_choices_to={'user_type': '2'})
     status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('accepted', 'Accepted'), ('declined', 'Declined')], default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+#V2 Models
+
+# class CrewRequirements(models.Model):
+#     title = models.CharField(max_length=256, null=True, blank=True)
+#     quantity = models.PositiveIntegerField(null=True, blank=True)
+    
+#     def __str__(self):
+#         return self.title
+
+# class EquipmentRequirements(models.Model):
+#     title = models.CharField(max_length=256, null=True, blank=True)
+#     quantity = models.PositiveIntegerField(null=True, blank=True)
+    
+#     def __str__(self):
+#         return self.title
+
+class Permission(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+class Role(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    permission = models.ManyToManyField(Permission, related_name='permission', blank=True)
+    description = models.TextField(null=True, blank=True)
+    project = models.ForeignKey('ProjectDetails', on_delete=models.CASCADE, null=True, blank=True, related_name='roles')
+    is_global = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.name
+    
+class Membership(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='membership_role')
+    project = models.ForeignKey('ProjectDetails', on_delete=models.CASCADE, null=True, blank=True, related_name='memberships')  # Null for global roles not tied to a project
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.role.name}"
+    
+class ProjectDetails(models.Model):
+    project_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    members = models.ManyToManyField(Membership, related_name='project_members', blank=True)
+    name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=256)
+    brief = models.TextField() #TODO Word Limit
+    additional_details = models.TextField() #TODO Word Limit
+    status = models.CharField(max_length=30, choices=StatusChoices.choices, default=StatusChoices.PLANNING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        ordering = ['project_id']
+        
+class ProjectInvite(models.Model):
+    INVITE_STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('ACCEPTED', 'Accepted'),
+        ('REJECTED', 'Rejected'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE, related_name='invites')
+    inviter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_invites')  # Project admin
+    invitee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_invites')  # User being invited
+    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)  # Optional role in the project
+    status = models.CharField(max_length=10, choices=INVITE_STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('project', 'invitee')
+
+    def accept(self):
+        """Accept the invite and add the user to the project."""
+        if self.status == 'PENDING':
+            default_role = Role.objects.filter(name='member').first()
+            Membership.objects.create(user=self.invitee, role=self.role or default_role, project=self.project)
+            self.status = 'ACCEPTED'
+            self.save()
+
+    def reject(self):
+        """Reject the invite."""
+        if self.status == 'PENDING':
+            self.status = 'REJECTED'
+            self.save()
+
+    def __str__(self):
+        return f"Invite to {self.invitee.email} for {self.project.name}"
+    
+class ProjectCrewRequirement(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    crew_title = models.CharField(max_length=256, null=True, blank=True)
+    quantity = models.PositiveIntegerField()
+
+#TODO Remove equipment requirement from everywhere
+class ProjectEquipmentRequirement(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    equipment_title = models.CharField(max_length=256, null=True, blank=True)
+    quantity = models.PositiveIntegerField()
+    
+class ProjectRequirements(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    budget_currency = models.CharField(max_length=256, default='$')
+    budget = models.DecimalField(max_digits=14, decimal_places=2, null=True)
+    crew_requirements = models.ManyToManyField(ProjectCrewRequirement, related_name='projects_with_crew')
+    equipment_requirements = models.ManyToManyField(ProjectEquipmentRequirement, related_name='projects_with_equipment')
+    status = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE , related_name='project_requirements')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.project.name} - Requirements"
+    
+class ShootingDetails(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    location = models.CharField(max_length=255)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    mode_of_shooting = models.CharField(max_length=255, choices=[('indoor', 'Indoor'), ('outdoor', 'Outdoor'), ('both', 'Both')])
+    permits = models.BooleanField(default=False)
+    ai_suggestion = models.BooleanField(default=False)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE , related_name='shooting_details')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.project.name} - Shooting at {self.location}"
+    
+class ProjectAISuggestions(models.Model):
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
+    shoot = models.ForeignKey(ShootingDetails, on_delete=models.CASCADE, null=True, blank=True)
+    suggested_budget =  models.TextField(null=True, blank=True)
+    suggested_compliance = models.TextField(null=True, blank=True)
+    suggested_culture = models.TextField(null=True, blank=True)
+    suggested_logistics = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"AI Suggestions for {self.project.name}"

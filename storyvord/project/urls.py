@@ -1,6 +1,7 @@
-from django.urls import path
-from .views import *
-
+from django.urls import path,include
+from rest_framework.routers import DefaultRouter
+from .views.views_v1 import *
+from .views.views_v2 import *
 
 urlpatterns = [
     # Projects
@@ -15,4 +16,22 @@ urlpatterns = [
     path('<str:project_id>/onboard-requests/', OnboardRequestsByProjectView.as_view(), name='onboard_requests_by_project'),
 
     path('crew/<str:project_id>/', CrewListView.as_view(), name='crew-list'),
+]
+
+router = DefaultRouter()
+
+# Register viewsets with the router
+router.register(r'projects', ProjectViewSet, basename='project')
+router.register(r'project-requirements', ProjectRequirementsViewSet, basename='project-requirements')
+router.register(r'shooting-details', ShootingDetailsViewSet, basename='shooting-details')
+router.register(r'roles', RoleViewSet, basename='roles')
+router.register(r'memberships', MembershipViewSet, basename='memberships')
+
+urlpatterns += [
+    path('v2/', include(router.urls)),
+    path('v2/firstproject/', FirstProjectView.as_view(), name='firstproject'),
+    path('v2/skiponboard/', SkipOnboardView.as_view(), name='skiponboard'),
+    path('v2/ai_suggestion/', SuggestionView.as_view(), name='suggestion'),
+    path('v2/invites/<uuid:invite_id>/respond/', RespondToInviteView.as_view(), name='respond_to_invite'),
+    path('v2/get_invites/', GetInvitesView.as_view(), name='get_invites'),
 ]

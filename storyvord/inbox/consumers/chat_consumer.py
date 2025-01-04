@@ -1,6 +1,6 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
-from inbox.models import DialogsModel, InboxGroup, InboxMessage, MessageModel
+from inbox.models import DialogsModel, MessageModel, RoomModel
 from accounts.models import User
 from channels.db import database_sync_to_async
 from rest_framework_simplejwt.tokens import AccessToken
@@ -16,27 +16,41 @@ from asgiref.sync import sync_to_async
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        print(f"Connecting to path: {self.scope['path']}")
         # Extract access token from the query string
         query_string = self.scope.get('query_string').decode("utf-8")
         access_token = self._get_query_param(query_string, 'access_token')
         
-        # Authenticate user using the access token
-        self.user = await self.get_user_from_token(access_token)
-
-        if self.user is None:
-            # If the user is not authenticated, close the connection
+        try:
+            # Authenticate user using the access token
+            self.user = await self.get_user_from_token(access_token)
+            print(self.user)
+        except Exception as e:
+            print(f"Error: {e}")
             await self.close()
-        else:
-            # Get the recipient's user ID from the URL
-            self.recipient_id = self.scope["url_route"]["kwargs"]["user_id"]
+            return
+        
+        self.room_type = self.scope["url_route"]["kwargs"]["type"]  # "user" or "room"
+        self.room_id = self.scope["url_route"]["kwargs"]["id"]
+        
+        if not self.user.is_authenticated:
+            await self.close()
+            return
+        
+        if self.room_type == "user":
+            self.room_group_name = f"chat_user_{min(self.user.id, int(self.room_id))}_{max(self.user.id, int(self.room_id))}"
+        else:  # Room chat
+            self.room_group_name = f"chat_room_{self.room_id}"
 
-            # Create a consistent room name regardless of the sender-recipient order
-            self.room_group_name = f'chat_{min(self.user.id, self.recipient_id)}_{max(self.user.id, self.recipient_id)}'
-
-            # Mark user as online in in-memory cache
+        try:
             await self.set_user_online(self.user.id)
+        except Exception as e:
+            print(f"Error setting user online: {e}")
+            await self.close()
+            return
 
-            # Notify other users in the group that this user is online
+        # Notify other users in the group that this user is online
+        try:
             await self.channel_layer.group_add(
                 self.room_group_name,
                 self.channel_name
@@ -49,8 +63,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     'status': 'online'
                 }
             )
+        except Exception as e:
+            print(f"Error sending online status: {e}")
+            await self.close()
+            return
 
-            await self.accept()
+        await self.accept()
 
     async def disconnect(self, close_code):
         # Mark user as offline in in-memory cache
@@ -74,32 +92,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
     async def receive(self, text_data):
         data = json.loads(text_data)
-
-        # Check the type of message received (either 'chat', 'typing', or 'status')
-        if 'message' in data:
-            message = data['message']
-
-            if self.user.is_authenticated:
-                # Save the message to the database
-                recipient = await database_sync_to_async(User.objects.get)(id=self.recipient_id)
-                new_message = await database_sync_to_async(MessageModel.objects.create)(
-                    sender=self.user,
-                    recipient=recipient,
-                    text=message
-                )
-
-                # Send the message to the room group with detailed user info
-                await self.channel_layer.group_send(
-                    self.room_group_name,
-                    {
-                        'type': 'chat_message',
-                        'message': message,
-                        'sender': await self.get_user_info(self.user.id),
-                        'recipient': await self.get_user_info(self.recipient_id),
-                        'you': True
-                    }
-                )
-        elif 'typing' in data:
+        message_text = data.get('message', '')
+        
+        if self.room_type == "user":
+            recipient = await database_sync_to_async(User.objects.get)(id=self.room_id)
+            message = await database_sync_to_async(MessageModel.objects.create)(
+                sender=self.user, recipient=recipient, text=message_text
+            )
+        else:  # Room chat
+            room = await database_sync_to_async(RoomModel.objects.get)(id=self.room_id)
+            message = await database_sync_to_async(MessageModel.objects.create)(
+                sender=self.user, room=room, text=message_text
+            )
+        
+        # Send the message to the room group with detailed user info
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'message': message_text,
+                'sender': self.user.id,
+                'sender_info': await self.get_user_info(self.user.id),
+            }
+        )
+        
+        if 'typing' in data:
             # Handle typing event
             typing_status = data['typing']
 
@@ -109,23 +126,18 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 {
                     'type': 'typing_status',
                     'typing': typing_status,
-                    'sender': await self.get_user_info(self.user.id),
-                    'you': True
+                    'sender': str(self.user.id),
                 }
             )
 
     async def chat_message(self, event):
         message = event['message']
         sender = event['sender']
-        recipient = event['recipient']
-        you = event['you']
 
         # Send the message to the WebSocket
         await self.send(text_data=json.dumps({
             'message': message,
             'sender': sender,
-            'recipient': recipient,
-            # 'you': you
         }))
 
     async def typing_status(self, event):
@@ -200,10 +212,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
         """
         Get the name of the user based on their profile.
         """
-        if user.user_type == 'client':
+        if user.user_type == '1':
             profile = getattr(user, 'clientprofile', None)
             return f"{profile.firstName} {profile.lastName}" if profile else None
-        elif user.user_type == 'crew':
+        elif user.user_type == '2':
             profile = getattr(user, 'crewprofile', None)
             return profile.name if profile else None
         return None
@@ -374,15 +386,10 @@ class InboxChatConsumer(AsyncWebsocketConsumer):
         """
         Get the name of the user based on their profile.
         """
-        if user.user_type == 'client':
+        if user.user_type == '1':
             profile = getattr(user, 'clientprofile', None)
             return f"{profile.firstName} {profile.lastName}" if profile else None
-        elif user.user_type == 'crew':
+        elif user.user_type == '2':
             profile = getattr(user, 'crewprofile', None)
             return profile.name if profile else None
         return None
-
-    def _get_query_param(self, query_string, param):
-        # Parse query string and return the value of the provided parameter
-        params = dict(p.split('=') for p in query_string.split('&'))
-        return params.get(param, None)
