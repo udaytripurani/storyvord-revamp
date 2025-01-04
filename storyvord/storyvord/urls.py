@@ -51,6 +51,7 @@ urlpatterns = [
     path('api/company/', include('company.urls'),name='company'),
     path('api/inbox/', include('inbox.urls'),name='inbox'),
     path('api/files/', include('files.urls'),name='files'),
+    path('api/creative_hub/', include('creative_hub.urls'),name='creative_hub'),
     
     # Auth and user management
     path('auth/', include('djoser.urls')),
