@@ -48,6 +48,12 @@ class WeatherSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_kwargs = {'call_sheet': {'required': False}}
 
+class CallTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CallTime
+        fields = '__all__'
+        extra_kwargs = {'call_sheet': {'required': False}}
+
 class CallSheetSerializer(serializers.ModelSerializer):
     events = EventSerializer(many=True, required=False)
     # scenes = ScenesSerializer(many=True, required=False)
@@ -56,30 +62,37 @@ class CallSheetSerializer(serializers.ModelSerializer):
     # department_instructions = DepartmentInstructionsSerializer(many=True, required=False)
     call_time = CallTimeSerializer(required=False, many= True)
     weather = WeatherSerializer(many=True, required=False)
+    call_time = CallTimeSerializer(required=False, many= True)
 
     class Meta:
         model = CallSheet
         fields = '__all__'
 
+    def validate(self, data):
+        date = data.get('date')
+        today = datetime.today().date()
+        if date <= today:
+            raise serializers.ValidationError("Date must be in the future")
+        return data
+
     def to_representation(self, instance):
         ret = super().to_representation(instance)
         ret['events'] = EventSerializer(instance.events.all(), many=True).data
         ret['call_time'] = CallTimeSerializer(instance.call_time.all(), many=True).data
-        # ret['scenes'] = ScenesSerializer(instance.scenes.all(), many=True).data
-        # ret['characters'] = CharactersSerializer(instance.characters.all(), many=True).data
-        # ret['extras'] = ExtrasSerializer(instance.extras.all(), many=True).data
-        # ret['department_instructions'] = DepartmentInstructionsSerializer(instance.department_instructions.all(), many=True).data
+        ret['scenes'] = ScenesSerializer(instance.scenes.all(), many=True).data
+        ret['characters'] = CharactersSerializer(instance.characters.all(), many=True).data
+        ret['extras'] = ExtrasSerializer(instance.extras.all(), many=True).data
+        ret['department_instructions'] = DepartmentInstructionsSerializer(instance.department_instructions.all(), many=True).data
         ret['weather'] = WeatherSerializer(instance.weather.all(), many=True).data
         return ret
 
     def create(self, validated_data):
         events_data = validated_data.pop('events', [])
         call_time_data = validated_data.pop('call_time', [])
-        # scenes_data = validated_data.pop('scenes', [])
-        # characters_data = validated_data.pop('characters', [])
-        # extras_data = validated_data.pop('extras', [])
-        # department_instructions_data = validated_data.pop('department_instructions', [])
-        allowed_users = validated_data.pop('allowed_users', [])
+        scenes_data = validated_data.pop('scenes', [])
+        characters_data = validated_data.pop('characters', [])
+        extras_data = validated_data.pop('extras', [])
+        department_instructions_data = validated_data.pop('department_instructions', [])
 
         location = validated_data.get('location')
 
@@ -134,6 +147,8 @@ class CallSheetSerializer(serializers.ModelSerializer):
 
         call_sheet = CallSheet.objects.create(**validated_data)
 
+        for call_time_data in call_time_data:
+            CallTime.objects.create(call_sheet=call_sheet, **call_time_data)
         for event_data in events_data:
             Event.objects.create(call_sheet=call_sheet, **event_data)
 
@@ -163,6 +178,7 @@ class CallSheetSerializer(serializers.ModelSerializer):
         return call_sheet
 
     def update(self, instance, validated_data):
+        call_time_data = validated_data.pop('call_time', [])
         events_data = validated_data.pop('events', [])
         call_time_data = validated_data.pop('call_time', [])
         # scenes_data = validated_data.pop('scenes', [])
@@ -202,6 +218,7 @@ class CallSheetSerializer(serializers.ModelSerializer):
         instance.save()
 
         # Update or create related models
+        self.update_related_models(CallTime, call_time_data, instance)
         self.update_related_models(Event, events_data, instance)
         self.update_related_models(CallTime, call_time_data, instance)
         # self.update_related_models(Scenes, scenes_data, instance)

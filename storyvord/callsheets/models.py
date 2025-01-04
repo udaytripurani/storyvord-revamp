@@ -1,9 +1,9 @@
 # callsheets/models.py
 from django.db import models
-from project.models import Project
+from project.models import ProjectDetails
 
 class CallSheet(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     date = models.DateField(null=True, blank=True)
     calltime = models.TimeField(null=True, blank=True)
@@ -13,10 +13,6 @@ class CallSheet(models.Model):
     nearest_fire_station = models.CharField(max_length=255, blank=True)
     additional_notes = models.TextField(blank=True, null=True)
     production_notes = models.TextField(blank=True, null=True)
-    breakfast = models.TimeField(null=True, blank=True)
-    lunch = models.TimeField(null=True, blank=True)
-    dinner = models.TimeField(null=True, blank=True)
-    allowed_users = models.ManyToManyField('accounts.User', related_name='callsheets', blank=True)
 
     def __str__(self):
         return self.title
@@ -29,6 +25,7 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
+        
 class CallTime(models.Model):
     call_sheet = models.ForeignKey(CallSheet, on_delete=models.CASCADE, related_name='call_time')
     name = models.CharField(max_length=255)
@@ -38,6 +35,18 @@ class CallTime(models.Model):
     phone = models.CharField(max_length=255)
     remarks = models.TextField(blank=True, null=True)
     
+    def __str__(self):
+        return self.name
+
+class Scenes(models.Model):
+    call_sheet = models.ForeignKey(CallSheet, on_delete=models.CASCADE, related_name='scenes')
+    scene_number = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    page_count = models.IntegerField(blank=True, null=True)
+    cast = models.TextField()
+    location = models.CharField(max_length=255)
+    other_notes = models.TextField(blank=True, null=True)
+
     def __str__(self):
         return self.name
 

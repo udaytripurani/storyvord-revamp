@@ -2,21 +2,29 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from client.models import ClientProfile
+from client.models import ClientProfile, ClientCompanyProfile
 from .serializers import ClientInvitationSerializer, EmployeeRegisterWithReferralSerializer, InvitationRequestSerializer, ListProjectInvitationSerializer, RegisterWithReferralSerializer
 from .models import ClientInvitation, ProjectInvitation
 from rest_framework.permissions import IsAuthenticated
 from accounts.models import User
-from project.models import Project
+from project.models import Project, ProjectDetails  # Update import for ProjectDetails
+from storyvord.exception_handlers import custom_exception_handler
 
 class AddCrewToProjectView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = InvitationRequestSerializer
     def post(self, request, *args, **kwargs):
-        serializer = InvitationRequestSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response({'detail': 'Invitation sent.'}, status=status.HTTP_201_CREATED)
+        try:
+            serializer = InvitationRequestSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                raise Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
+            return Response({'detail': 'Invitation sent.'}, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            print(exc)
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+            
 
 class AcceptInvitationView(APIView):
     permission_classes = [IsAuthenticated]
@@ -36,7 +44,7 @@ class AcceptInvitationView(APIView):
             user = User.objects.get(email=invitation.crew_email)
             project = invitation.project
             print(project, "project")
-            project.crew_profiles.add(user)
+            project.members.add(user)  # Update to add user to project members
             project.save()
 
             return Response({'detail': 'Invitation accepted.'}, status=status.HTTP_200_OK)
@@ -73,8 +81,12 @@ class RegisterWithReferralCrewView(APIView):
         }
 
         serializer = RegisterWithReferralSerializer(data=data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
+        project = ProjectDetails.objects.get(project_id=data['project_id'])
+        project.members.add(serializer.instance)  # Update to add user to project members
+        project.save()
         return Response({'detail': 'Registration complete and added to project.'}, status=status.HTTP_201_CREATED)
 
 class CrewInvitationsView(APIView):
@@ -83,6 +95,9 @@ class CrewInvitationsView(APIView):
     def get(self, request, *args, **kwargs):
         user_email = request.user.email
         invitations = ProjectInvitation.objects.filter(crew_email=user_email)
+
+        print("=============================================================")
+        print(invitations, "invitations")
         
         # Segregate the invitations by status
         pending_invitations = invitations.filter(status='pending')
@@ -110,7 +125,7 @@ class ClientCrewInvitationsView(APIView):
         user = request.user
         
         # Fetch project invitations related to the current user and project
-        invitations = ProjectInvitation.objects.filter(project__user=user, project__project_id=project_id)
+        invitations = ProjectInvitation.objects.filter(project__project_id=project_id)
 
         # Segregate the invitations by status
         pending_invitations = invitations.filter(status='pending')
@@ -145,8 +160,6 @@ class AddEmployeeToClientProfileView(APIView):
         # Prepare new data dictionary with client_profile ID
         data = request.data.copy()  # Make a copy of the original data
         data['client_profile'] = client_profile.pk
-        print(data)
-        
         
         # Check if the employee is already working as an employee
         if ClientInvitation.objects.filter(employee_email=data['employee_email'], status='accepted').exists():
@@ -155,10 +168,20 @@ class AddEmployeeToClientProfileView(APIView):
 
         # Create and validate serializer
         serializer = ClientInvitationSerializer(data=data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
+        user = User.objects.get(email=data['employee_email'])
 
-        return Response({'detail': 'Invitation sent.'}, status=status.HTTP_201_CREATED)
+        clientCompanyProfile = ClientCompanyProfile.objects.get(user=client_profile.user)
+        clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
+        clientCompanyProfile.save()
+
+        data = {
+            'message': 'Invitation sent.',
+            'data': serializer.data
+        }
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class AcceptClientInvitationView(APIView):
@@ -171,9 +194,19 @@ class AcceptClientInvitationView(APIView):
 
             # Add the employee to the client profile
             user = User.objects.get(email=invitation.employee_email)
-            invitation.client_profile.employee_profile.add(user)
+            clientCompanyProfile = ClientCompanyProfile.objects.get(user=invitation.client_profile.user)
+            clientCompanyProfile.employee_profile.add(user)  # Update to add user to employee_profile
+            clientCompanyProfile.save()
 
-            return Response({'detail': 'Invitation accepted and you have been added to the client profile.'}, status=status.HTTP_200_OK)
+            # Serialize the invitation data
+            serializer = ClientInvitationSerializer(invitation)
+
+            data = {
+                'message': 'Invitation accepted and you have been added to the client profile.',
+                'data': serializer.data
+            }
+
+            return Response(data, status=status.HTTP_200_OK)
         except ClientInvitation.DoesNotExist:
             return Response({'detail': 'Invitation not found or already processed.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -185,7 +218,14 @@ class RejectClientInvitationView(APIView):
             invitation = ClientInvitation.objects.get(referral_code=referral_code, status='pending')
             invitation.status = 'rejected'
             invitation.save()
-            return Response({'detail': 'Invitation rejected.'}, status=status.HTTP_200_OK)
+
+            serializer = ClientInvitationSerializer(invitation)
+            
+            data = {
+                'message': 'Invitation rejected.',
+                'data': serializer.data
+            }
+            return Response(data , status=status.HTTP_200_OK)
         except ClientInvitation.DoesNotExist:
             return Response({'detail': 'Invitation not found or already processed.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -193,7 +233,8 @@ class RejectClientInvitationView(APIView):
 class RegisterWithReferralView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = EmployeeRegisterWithReferralSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response({'detail': 'Registration complete and added to client profile.'}, status=status.HTTP_201_CREATED)
     

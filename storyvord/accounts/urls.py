@@ -1,5 +1,9 @@
-from django.urls import path
-from .views import *
+from django.urls import path , include
+from .views.views import *
+from .views.auth_views import RegisterViewV2 , LoginViewV2, LogoutViewV2
+from .views.email_verification import VerifyEmail as VerifyEmailV2
+from .views.profile_views import *
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
@@ -18,4 +22,17 @@ urlpatterns = [
     path('register/onboard/', SelectUserType.as_view(), name='user-usertype-onboard'),
 
     path('google/', google_custom_login_redirect, name='google-login'),
+]
+
+urlpatterns += [
+    path('v2/register/', RegisterViewV2.as_view(), name='register-v2'),
+    path('v2/email-verify/', VerifyEmailV2.as_view(), name="email-verify-v2"),
+    path('v2/login/', LoginViewV2.as_view(), name='login-v2'),
+    path('v2/logout/', LogoutViewV2.as_view(), name='logout-v2'),
+    path('v2/usertype/', UpdateUserTypeView.as_view(), name='user-usertype-v2'),
+    path('v2/saveprofile/', SavePersonalInfoView.as_view(), name='user-profile-v2'),
+    path('v2/getprofile/', GetPersonalInfoView.as_view(), name='user-profile-v2'),
+    path('v2/getdropdowns/', getDropdownsView.as_view(), name='get-dropdowns-v2'),
+    path('v2/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('v2/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 ]

@@ -1,6 +1,9 @@
 # urls.py
-from django.urls import path
+from django.urls import path, include
 from .views import *
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
 
 urlpatterns = [
     path('announcements/', AnnouncementListCreateAPIView.as_view(), name='announcement-list-create'),
@@ -11,3 +14,9 @@ urlpatterns = [
 
     path('users/<str:project_id>/', ProjectUserListAPIView.as_view(), name='user-list-create'),
 ]
+
+router.register(r'project-announcements', ProjectAnnouncementViewSet, basename='project-announcement')
+
+urlpatterns += [
+    path('v2/', include(router.urls))
+    ]

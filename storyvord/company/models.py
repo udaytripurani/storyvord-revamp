@@ -71,7 +71,7 @@ class AddressBookFiles(models.Model):
 class ClientCompanyTask(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
-    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='company_tasks', on_delete=models.CASCADE)
+    assigned_to = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='company_tasks')
     due_date = models.DateField()
     completed = models.BooleanField(default=False)
     completion_requested = models.BooleanField(default=False)

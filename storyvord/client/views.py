@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import permissions
+from storyvord.exception_handlers import custom_exception_handler
 
 
 from crew.models import CrewProfile
@@ -63,201 +64,301 @@ from accounts.models import User  # Adjust the import path as per your User mode
 
 class OnboardAPIView(APIView):
     permissions_classes = [IsAuthenticated]
+    serializer_class = ProfileSerializer
 
     def get_object(self):
-        # Fetch profile based on logged-in user
-        profile = get_object_or_404(ClientProfile, user=self.request.user)  # Modified to fetch profile by user
+        profile = get_object_or_404(ClientProfile, user=self.request.user)
         return profile
 
     def put(self, request):
-        # Update profile based on logged-in user
-        user = request.user
+        try:
+            user = request.user
 
-        if user.user_type != 'client':
-            return Response({'error': 'User is not a client'}, status=status.HTTP_400_BAD_REQUEST)
+            if str(user.user_type) != 'client':
+                raise PermissionError('Only clients can onboard')
         
-        if user.steps:
-            return Response({'error': 'User has already completed the onboarding process'}, status=status.HTTP_400_BAD_REQUEST)
-        profile = self.get_object()
-        serializer = ProfileSerializer(profile, data=request.data)
-        if serializer.is_valid():
+            if user.steps:
+                raise PermissionError('User has already onboarded')
+
+            profile = self.get_object()
+            serializer = ProfileSerializer(profile, data=request.data)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+                
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            user.steps = True
+            user.user_stage = 2
+            user.save()
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 class ProfileDetailAPIView(APIView):
-    permission_classes = [IsAuthenticated]  # Apply IsAuthenticated permission globally
-
-    # parser_classes = [MultiPartParser]  # Enable MultiPartParser to handle file uploads
+    permission_classes = [IsAuthenticated]
     serializer_class = ProfileSerializer
+
     def get_object(self):
-        # Fetch profile based on logged-in user
-        profile = get_object_or_404(ClientProfile, user=self.request.user)  # Modified to fetch profile by user
+        profile = get_object_or_404(ClientProfile, user=self.request.user)
         return profile
 
     def get(self, request):
-        # Retrieve profile based on logged-in user
-        profile = self.get_object()
-        serializer = ProfileSerializer(profile)
-        return Response(serializer.data)
+        try:
+            profile = self.get_object()
+            serializer = ProfileSerializer(profile)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
-    # def put(self, request):
-    #     # Update profile based on logged-in user
-    #     profile = self.get_object()
-    #     serializer = ProfileSerializer(profile, data=request.data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
     def put(self, request):
-        # Update profile based on logged-in user
-        profile = self.get_object()
-        serializer = ProfileSerializer(profile, data=request.data)
-        if serializer.is_valid():
+        try:
+            profile = self.get_object()
+            serializer = ProfileSerializer(profile, data=request.data)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
-    
-
-    # Other methods (get, delete) remain unchanged
-
-    # def put(self, request):
-    #     try:
-    #         profile = ClientProfile.objects.get(user=request.user)
-    #     except ClientProfile.DoesNotExist:
-    #         return Response({"detail": "Profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    #     serializer = ProfileSerializer(profile, data=request.data)
-    #     if serializer.is_valid():
-    #         # Handle image upload/update
-    #         # if 'image' in request.data:
-    #         #     # Delete previous image if updating
-    #         #     if profile.image:
-    #         #         profile.image.delete()
-
-    #         #     # Save new image and update URL
-    #         #     image = request.data.get('image')
-    #         #     profile.image = image
-    #         #     profile.image = f'https://storage.googleapis.com/storyvord-profile/{profile.image.name}'  # Update the image URL
-
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request):
-        # Delete profile based on logged-in user
-        profile = self.get_object()
-        profile.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-        
 class ClientCompanyProfileAPIView(APIView):
     permissions_classes = [IsAuthenticated]
+    serializer_class = ClientCompanyProfileSerializer
 
     def get(self, request):
         try:
-            profile = ClientCompanyProfile.objects.get(user=request.user)
+            pk = request.query_params.get('pk', None)
+            if pk:
+                profile = get_object_or_404(ClientCompanyProfile, pk=pk)
+            else:
+                profile = get_object_or_404(ClientCompanyProfile, user=request.user)
+
+            if not profile.has_permission(request.user, 'edit'):
+                raise PermissionError('You do not have permission to view this profile')
+        
+            
             serializer = ClientCompanyProfileSerializer(profile)
-            return Response(serializer.data)
-        except ClientCompanyProfile.DoesNotExist:
-            return Response({"error": "Company profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
-    def put(self, request):
+    def put(self, request, pk=None):
         try:
-            profile = ClientCompanyProfile.objects.get(user=request.user)
-        except ClientCompanyProfile.DoesNotExist:
-            return Response({"error": "Company profile not found"}, status=status.HTTP_404_NOT_FOUND)
+            if pk:
+                profile = get_object_or_404(ClientCompanyProfile, pk=pk)
+            else:
+                profile = ClientCompanyProfile.objects.get(user=request.user)
 
-        serializer = ClientCompanyProfileSerializer(profile, data=request.data)
-        if serializer.is_valid():
+            serializer = ClientCompanyProfileSerializer(profile, data=request.data)
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
+# List all employees in a company
+class EmployeeListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = MembershipSerializer
+
+    def get(self, request, pk):
+        try:
+            # pk = request.query_params.get('pk', None)
+            # if not pk:
+                # raise serializers.ValidationError('Company ID is required as a query parameter "pk"')
+
+            company = get_object_or_404(ClientCompanyProfile, pk=pk)
+            memberships = Membership.objects.filter(company=company)
+            serializer = MembershipSerializer(memberships, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
 
 
 class SwitchProfileView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        user = request.user
-        data = request.data
-        switch_to_client = data.get('switch_to_client', False)
-        switch_to_crew = data.get('switch_to_crew', False)
+        try:
+            user = request.user
+            data = request.data
+            switch_to_client = data.get('switch_to_client', False)
+            switch_to_crew = data.get('switch_to_crew', False)
 
-        if not (switch_to_client or switch_to_crew):
-            return Response({'detail': 'Specify a role to switch to.'}, status=status.HTTP_400_BAD_REQUEST)
+            if not (switch_to_client or switch_to_crew):
+                return Response({'status': False,
+                                 'code': status.HTTP_400_BAD_REQUEST,
+                                 'message': 'Specify a role to switch to.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if switch_to_client:
-            # Activate Client profile and deactivate Crew profile
-            client_profile, created = ClientProfile.objects.get_or_create(user=user)
-            client_profile.active = True
-            client_profile.save()
+            if switch_to_client:
+                # Activate Client profile and deactivate Crew profile
+                client_profile, created = ClientProfile.objects.get_or_create(user=user)
+                client_profile.active = True
+                client_profile.save()
 
-            CrewProfile.objects.filter(user=user).update(active=False)
+                CrewProfile.objects.filter(user=user).update(active=False)
 
-            user.is_client = True
-            user.is_crew = False
-            user.save()
+                user.is_client = True
+                user.is_crew = False
+                user.save()
 
-        if switch_to_crew:
-            # Activate Crew profile and deactivate Client profile
-            crew_profile, created = CrewProfile.objects.get_or_create(user=user)
-            crew_profile.active = True
-            crew_profile.save()
+            if switch_to_crew:
+                # Activate Crew profile and deactivate Client profile
+                crew_profile, created = CrewProfile.objects.get_or_create(user=user)
+                crew_profile.active = True
+                crew_profile.save()
 
-            ClientProfile.objects.filter(user=user).update(active=False)
+                ClientProfile.objects.filter(user=user).update(active=False)
 
-            user.is_client = False
-            user.is_crew = True
-            user.save()
+                user.is_client = False
+                user.is_crew = True
+                user.save()
 
-        return Response({'detail': 'Profile updated successfully.'}, status=status.HTTP_200_OK)
+            return Response({'message': 'Success',
+                             'detail': 'Profile updated successfully.'}, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
 
 
 class ClientCompanyFolderView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ClientCompanyFolderSerializer
 
-    def get(self, request, format=None):
-        user = request.user
-        folders = ClientCompanyFolder.objects.filter(allowed_users=user).distinct()
-        serializer = ClientCompanyFolderSerializer(folders, many=True)
-        return Response(serializer.data)
+    def get(self, request, company_id):
+        try:
+            user = request.user
+            company = get_object_or_404(ClientCompanyProfile, pk=company_id)
 
-    def post(self, request, format=None):
-        serializer = ClientCompanyFolderSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
+            if company.has_permission(user, 'view_folder'):
+                folders = ClientCompanyFolder.objects.filter(company=company)
+            else:
+                folders = ClientCompanyFolder.objects.filter(company=company, allowed_users=user)
+            
+            serializer = ClientCompanyFolderSerializer(folders, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
+    def post(self, request, company_id):
+        try:
+            company = get_object_or_404(ClientCompanyProfile, pk=company_id)
+            if not company.has_permission(request.user, 'create_folder'):
+                raise PermissionError('You do not have permission to create folders for this company')
+
+            data = request.data.copy()
+            data['company'] = company_id
+
+            for user in data.get('allowed_users', []):
+                print(user)
+                if not company.memberships.filter(user=user).exists(): 
+                    raise PermissionError(f'User {user} does not have permission to view folders for this company')
+            
+            serializer = ClientCompanyFolderSerializer(data=data, context={'request': request})
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+
             serializer.save(created_by=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     # Delete folders?
 
 class ClientCompanyFileView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ClientCompanyFileSerializer
 
     def get(self, request, folder_id, format=None):
-        folder = get_object_or_404(ClientCompanyFolder, pk=folder_id, allowed_users=request.user)
-        files = folder.files.all()
-        serializer = ClientCompanyFileSerializer(files, many=True)
-        return Response(serializer.data)
+        try:
+            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id)
+
+            if not folder.company.has_permission(request.user, 'view_folder') or not folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
+            
+            files = folder.files.all()
+            serializer = ClientCompanyFileSerializer(files, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request, folder_id, format=None):
-        folder = get_object_or_404(ClientCompanyFolder, pk=folder_id, allowed_users=request.user)
-        data = request.data.copy()
-        data['folder'] = folder.id
-        serializer = ClientCompanyFileSerializer(data=data)
-        if serializer.is_valid():
+        try:
+            folder = get_object_or_404(ClientCompanyFolder, pk=folder_id)
+
+            if not folder.company.has_permission(request.user, 'create_folder'):
+                raise PermissionError('You do not have permission to create files to this folder')
+            
+            req_data = request.data.copy()
+            req_data['folder'] = folder.id
+            serializer = ClientCompanyFileSerializer(data=req_data)
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_201_CREATED)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
     # Delete files?
 
 class ClientCompanyFileUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ClientCompanyFileUpdateSerializer
 
     def get_object(self, pk):
         try:
@@ -266,45 +367,66 @@ class ClientCompanyFileUpdateView(APIView):
             return None
 
     def get(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
 
-        serializer = ClientCompanyFileUpdateSerializer(file, context={'request': request})
-        return Response(serializer.data)
+            if not file:
+                raise serializers.ValidationError('File not found.')
+
+            if not file.folder.company.has_permission(request.user, 'view_folder') or not file.folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
+
+            serializer = ClientCompanyFileUpdateSerializer(file, context={'request': request})
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
 
-        serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, context={'request': request})
-        if serializer.is_valid():
+            if file is None:
+                raise serializers.ValidationError('File not found.')
+
+
+            if not file.folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit files to this folder')
+
+            serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, context={'request': request})
+
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def patch(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = ClientCompanyFileUpdateSerializer(file, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, pk, format=None):
-        file = self.get_object(pk)
-        if file is None:
-            return Response({'detail': 'File not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            file = self.get_object(pk)
+            if file is None:
+                raise serializers.ValidationError('File not found.')
 
-        if file.folder.created_by != request.user:
-            return Response({'detail': 'You do not have permission to delete this file.'}, status=status.HTTP_403_FORBIDDEN)
+            if not file.folder.company.has_permission(request.user, 'delete_folder'):
+                raise PermissionError('You do not have permission to delete files to this folder')
 
-        file.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+
+            file.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     
 class ClientCompanyFolderUpdateView(APIView):
@@ -317,102 +439,183 @@ class ClientCompanyFolderUpdateView(APIView):
             return None
 
     def get(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            print("Get folder")
+            folder = self.get_object(pk)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder)
-        return Response(serializer.data)
+            if folder is None:
+                raise serializers.ValidationError('Folder not found.')
+
+            if not folder.company.has_permission(request.user, 'view_folder') or not folder.allowed_users.filter(pk=request.user.pk).exists():
+                raise PermissionError('You do not have permission to view this folder')
+
+            serializer = ClientCompanyFolderUpdateSerializer(folder)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            folder = self.get_object(pk)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, context={'request': request})
-        if serializer.is_valid():
+            if folder is None:
+                raise serializers.ValidationError('Folder not found.')
+            
+            if not folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit this folder')
+
+            serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, context={'request': request})
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
+            
             self.check_object_permissions(request, folder)
             serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def patch(self, request, pk, format=None):
-        folder = self.get_object(pk)
-        if folder is None:
-            return Response({'detail': 'Folder not found.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            folder = self.get_object(pk)
 
-        serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
-            self.check_object_permissions(request, folder)
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if folder is None:
+                raise serializers.ValidationError('Folder not found.')
 
-    def check_object_permissions(self, request, obj):
-        # Custom permission check
-        if obj.created_by != request.user:
-            self.permission_denied(request, message="You do not have permission to edit this folder.")
+            if not folder.company.has_permission(request.user, 'edit_folder'):
+                raise PermissionError('You do not have permission to edit this folder')
+
+            serializer = ClientCompanyFolderUpdateSerializer(folder, data=request.data, partial=True, context={'request': request})
+
+            if not serializer.is_valid():
+                raise serializers.ValidationError(serializer.errors)
             
+            serializer.save()
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
+    def delete(self, request, pk, format=None):
+        try:
+            folder = self.get_object(pk)
+
+            if folder is None:
+                raise serializers.ValidationError('Folder not found.')
+
+            if not folder.company.has_permission(request.user, 'delete_folder'):
+                raise PermissionError('You do not have permission to delete this folder')
+
+            folder.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
+
 # Calendar
 
 
 class ClientCompanyEventAPIView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ClientCompanyEventSerializer
+
     def get(self, request, event_id=None):
-        if event_id:
-            try:
+        try:
+            if (event_id):
                 event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
                 serializer = ClientCompanyEventSerializer(event)
-                return Response(serializer.data)
-            except ClientCompanyEvent.DoesNotExist:
-                return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+
+                data = {
+                    'message': 'Success',
+                    'data': serializer.data
+                }
+                return Response(data)
         
-        try:
             company_profile = ClientCompanyProfile.objects.get(user=request.user)
             print("Company prodile", company_profile)
             events = ClientCompanyEvent.objects.filter(calendar__company=company_profile)
             serializer = ClientCompanyEventSerializer(events, many=True)
-            return Response(serializer.data)
-        except ClientCompanyProfile.DoesNotExist:
-            return Response({"error": "Company profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def post(self, request):
-        serializer = ClientCompanyEventSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
+        try:
+            serializer = ClientCompanyEventSerializer(data=request.data, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def put(self, request, event_id):
         try:
             event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
-        except ClientCompanyEvent.DoesNotExist:
-            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ClientCompanyEventSerializer(event, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
+            serializer = ClientCompanyEventSerializer(event, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(exception=True)
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
     def delete(self, request, event_id):
         try:
             event = ClientCompanyEvent.objects.get(id=event_id, calendar__company__user=request.user)
             event.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except ClientCompanyEvent.DoesNotExist:
-            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
 
             
 
 class CompanyListView(APIView):
+
     def get(self, request, format=None):
-        # Get the ClientProfile associated with the current user
-        client_profile = ClientProfile.objects.filter(employee_profile=request.user)
+        try:
+            # Get the ClientProfile associated with the current user
+            client_profile = ClientProfile.objects.filter(employee_profile=request.user)
 
-        # Get all the companies where the user is listed in the employee profile
-        companies = ClientCompanyProfile.objects.filter(user__in=client_profile.values_list('user', flat=True))
+            # Get all the companies where the user is listed in the employee profile
+            companies = ClientCompanyProfile.objects.filter(user__in=client_profile.values_list('user', flat=True))
 
-        serializer = ClientCompanyProfileSerializer(companies, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            serializer = ClientCompanyProfileSerializer(companies, many=True)
+            data = {
+                'message': 'Success',
+                'data': serializer.data
+            }
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            response = custom_exception_handler(exc, self.get_renderer_context())
+            return response
