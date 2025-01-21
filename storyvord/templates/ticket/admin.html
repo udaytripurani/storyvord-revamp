@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7fc;
+        }
+
+        .navbar {
+            background-color: #343a40;
+            color: white;
+        }
+
+        .navbar-nav .nav-item {
+            margin-right: 20px;
+        }
+
+        .navbar-nav .nav-item a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .navbar-nav .nav-item a:hover {
+            color: #ddd;
+        }
+
+        .container {
+            margin-top: 30px;
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            background-color: #e9ecef;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .table th, .table td {
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .btn {
+            border-radius: 5px;
+            font-weight: 600;
+        }
+
+        .form-group label {
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: #4CAF50;
+            box-shadow: 0 0 8px rgba(76, 175, 80, 0.2);
+        }
+
+        .nav-tabs {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        .nav-tabs .nav-item .nav-link {
+            border-radius: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .nav-tabs .nav-item .nav-link:hover {
+            background-color: #f8f9fa;
+            color: #007bff;
+        }
+
+        .nav-tabs .nav-item .nav-link.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .tab-content {
+            margin-top: 30px;
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        .alert {
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+    </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <a class="navbar-brand" href="#">Storyvord</a>
+    
+</nav>
+
+<!-- Main Content -->
+<div class="container">
+
+    <!-- Analytics Section -->
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="header-title">Total Tickets</h5>
+                </div>
+                <div class="card-body">
+                    <p id="total-tickets">Loading...</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="header-title">Resolved Tickets</h5>
+                </div>
+                <div class="card-body">
+                    <p id="resolved-tickets">Loading...</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="header-title">Total Agents</h5>
+                </div>
+                <div class="card-body">
+                    <p id="total-agents">Loading...</p>
+                </div>
+            </div>
+        </div>
+        <!-- Add more analytics cards as needed -->
+    </div>
+
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs" id="tabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="tickets-tab" data-toggle="tab" href="#tickets-content" role="tab">Manage Tickets</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="agents-tab" data-toggle="tab" href="#agents-content" role="tab">Manage Agents</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="create-agent-tab" data-toggle="tab" href="#create-agent-content" role="tab">Create Agent</a>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+        
+        <!-- Tickets Content (Tab 1) -->
+        <div class="tab-pane fade show active" id="tickets-content" role="tabpanel">
+            <h3 class="header-title">Manage Tickets</h3>
+            <table id="ticket-table" class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Ticket ID</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Assigned To</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Dynamically filled with ticket data -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Agents Content (Tab 2) -->
+        <div class="tab-pane fade" id="agents-content" role="tabpanel">
+            <h3 class="header-title">Agents</h3>
+            <table id="agent-table" class="table table-bordered table-striped">
+                <thead>
+                    <tr>
+                        <th>Agent ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Dynamically filled with agent data -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Create Agent Content (Tab 3) -->
+        <div class="tab-pane fade" id="create-agent-content" role="tabpanel">
+            <h3 class="header-title">Create New Agent</h3>
+            <form id="create-agent-form">
+                <div class="form-group">
+                    <label for="agent-name">Name</label>
+                    <input type="text" id="agent-name" name="name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="agent-email">Email</label>
+                    <input type="email" id="agent-email" name="email" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="agent-password">Password</label>
+                    <input type="password" id="agent-password" name="password" class="form-control" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Agent</button>
+            </form>
+        </div>
+
+    </div>
+
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+
+<script>
+// JavaScript for managing ticket data and agent creation
+
+document.addEventListener("DOMContentLoaded", function () {
+    const accessToken = localStorage.getItem('admin_access_token');
+    
+    if (!accessToken) {
+        window.location.href = '/login'; // Redirect to login if no access token
+    }
+
+    // Fetch analytics data
+    fetchAnalyticsData();
+
+    // Fetch ticket data
+    fetchTicketData();
+    fetchAgentData();
+
+    // Handle agent creation form submission
+    document.getElementById('create-agent-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const name = document.getElementById('agent-name').value;
+        const email = document.getElementById('agent-email').value;
+        const password = document.getElementById('agent-password').value;
+
+        createAgent(name, email, password);
+    });
+});
+
+
+function fetchAgentData() {
+    fetch('http://127.0.0.1:8000/api/agents/', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('admin_access_token')}`,
+        }
+    })
+    .then(response => response.json()) // Parsing the response to JSON
+    .then(data => {
+        console.log("Response Data:", data); // Log the entire response to inspect its structure
+        
+        // Access the agents array from the `results` field
+        const agents = data.results;
+        const totalAgents = agents.length; // Assuming `results` is an array of agents
+        document.getElementById('total-agents').innerText = totalAgents || '0';
+
+        const agentTableBody = document.querySelector('#agent-table tbody');
+        agentTableBody.innerHTML = ''; // Clear existing rows
+
+        // Loop through the agents array and create table rows for each agent
+        agents.forEach(agent => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${agent.id}</td>
+                <td>${agent.name}</td>
+                <td>${agent.email}</td>
+            `;
+            agentTableBody.appendChild(row);
+        });
+    })
+    .catch(error => {
+        console.error('Error fetching agent data:', error);
+    });
+}
+
+// Function to fetch analytics data
+function fetchAnalyticsData() {
+    fetch('http://127.0.0.1:8000/api/tickets/admin/analytics/', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('admin_access_token')}`,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('total-tickets').innerText = data.total_tickets || '0';
+        document.getElementById('resolved-tickets').innerText = data.resolved_tickets || '0';
+        document.getElementById('total-agents').innerText = data.total_agents || '0';
+        document.getElementById('total-comments').innerText = data.total_comments || '0';
+        
+        // Display priority counts
+        let priorityCountsHTML = '';
+        for (const [priority, count] of Object.entries(data.priority_counts)) {
+            priorityCountsHTML += `<p>${priority}: ${count}</p>`;
+        }
+        document.getElementById('priority-counts').innerHTML = priorityCountsHTML;
+
+        // Display status counts
+        let statusCountsHTML = '';
+        for (const [status, count] of Object.entries(data.status_counts)) {
+            statusCountsHTML += `<p>${status}: ${count}</p>`;
+        }
+        document.getElementById('status-counts').innerHTML = statusCountsHTML;
+
+        // Display tickets per agent
+        let ticketsPerAgentHTML = '';
+        for (const [agent, count] of Object.entries(data.tickets_per_agent)) {
+            ticketsPerAgentHTML += `<p>${agent}: ${count}</p>`;
+        }
+        document.getElementById('tickets-per-agent').innerHTML = ticketsPerAgentHTML;
+
+        document.getElementById('total-agents-with-tickets').innerText = data.total_agents_with_tickets || '0';
+    })
+    .catch(error => {
+        console.error('Error fetching analytics data:', error);
+    });
+}
+
+// Function to fetch tickets data
+function fetchTicketData() {
+    fetch('http://127.0.0.1:8000/api/ticket/', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('admin_access_token')}`,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const ticketTableBody = document.querySelector('#ticket-table tbody');
+        ticketTableBody.innerHTML = ''; // Clear existing rows
+        console.log("Response:", data); // Log the response for debugging
+
+        // Accessing the tickets from the 'results' field
+        data.results.forEach(ticket => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${ticket.ticket_id}</td>
+                <td>${ticket.title}</td>
+                <td>${ticket.status}</td>
+                <td>${ticket.assigned_to || 'Unassigned'}</td>
+                <td>
+                    <button class="btn btn-primary" onclick="assignTicket('${ticket.ticket_id}')">Assign</button>
+                </td>
+            `;
+            ticketTableBody.appendChild(row);
+        });
+    })
+    .catch(error => {
+        console.error('Error fetching ticket data:', error);
+    });
+}
+
+// Function to assign a ticket to an agent
+function assignTicket(ticketId) {
+    const agentId = prompt('Enter Agent ID to assign to this ticket:');
+    if (agentId) {
+        fetch(`http://127.0.0.1:8000/api/ticket/${ticketId}/`, {
+            method: 'PATCH',  // Use PATCH for partial updates
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('admin_access_token')}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ assigned_to: agentId })  // Data to update (agent assignment)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Ticket assigned successfully!');
+                fetchTicketData(); // Refresh the ticket list
+            } else {
+                alert('Failed to assign ticket.');
+            }
+        })
+        .catch(error => {
+            console.error('Error assigning ticket:', error);
+        });
+    }
+}
+
+
+// Function to create a new agent
+function createAgent(name, email, password) {
+    fetch('/api/admin/agents/create/', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${localStorage.getItem('admin_access_token')}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Agent created successfully!');
+        } else {
+            alert('Failed to create agent.');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating agent:', error);
+    });
+}
+</script>
+
+</body>
+</html>
