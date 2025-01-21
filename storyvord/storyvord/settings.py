@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'chat',
     'network',
     'creative_hub',
+    'ticket',
 
 
     'allauth',

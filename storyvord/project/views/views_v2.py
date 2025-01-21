@@ -189,75 +189,68 @@ class GetInvitesView(APIView):
 
     def get(self, request):
         try:
-            # Fetch invites for the authenticated user
+            # Get project_id from query params
+            project_id = request.query_params.get('project_id')
+
+            # Start by fetching the invites for the authenticated user
             invites = ProjectInvite.objects.filter(
                 Q(inviter=request.user) | Q(invitee=request.user)
             )
 
-            # Serialize the invites
+            # If project_id is passed, filter invites by project
+            if project_id:
+                invites = invites.filter(project_id=project_id)
+
+            # Serialize the filtered invites
             serializer = ProjectInviteSerializer(invites, many=True)
+
+            # Separate invites into invitee and inviter categories
             invitee_invites = [invite for invite in serializer.data if invite['invitee'] == request.user.id]
             inviter_invites = [invite for invite in serializer.data if invite['inviter'] == request.user.id]
 
-            project_id = request.query_params.get('project_id')
             project_data = {}
 
-            # If project_id is passed, filter the invites by project
-            if project_id:
-                for invite in invitee_invites + inviter_invites:
-                    proj_id = project_id
-                    if proj_id not in project_data:
-                        project = ProjectDetails.objects.get(Q(project_id=proj_id) & Q(owner=request.user))
-                        project_data[proj_id] = {
-                            'project_id': project.project_id,
-                            'project_name': project.name,
-                            'project_status': project.status,
-                            'created_at': project.created_at,
-                            'invites': []
-                        }
-                    project_data[proj_id]['invites'].append({
-                        'invite_id': invite['id'],
-                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
-                        'status': invite['status'],
-                        'updated_at': invite['updated_at'],
-                         'user_details':{
-                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
-                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
-                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
-                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
-                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
-                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
-                        }
-                    })
+            # Cache user details to avoid redundant queries
+            user_details_cache = {}
+            user_ids = set(invite['inviter'] for invite in invitee_invites + inviter_invites) | \
+                        set(invite['invitee'] for invite in invitee_invites + inviter_invites)
+            
+            users = User.objects.filter(id__in=user_ids)
+            personal_info = PersonalInfo.objects.filter(user__in=users)
 
-            # If project_id is not passed, return all invites
-            else:
-                for invite in invitee_invites + inviter_invites:
-                    proj_id = invite['project']
-                    if proj_id not in project_data:
-                        project = ProjectDetails.objects.get(project_id=proj_id)
-                        project_data[proj_id] = {
-                            'project_id': project.project_id,
-                            'project_name': project.name,
-                            'project_status': project.status,
-                            'created_at': project.created_at,
-                            'invites': []
-                        }
-                    project_data[proj_id]['invites'].append({
-                        'invite_id': invite['id'],
-                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
-                        'status': invite['status'],
-                        'updated_at': invite['updated_at'],
-                        'user_details':{
-                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
-                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
-                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
-                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
-                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
-                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
-                        }
-                    })
+            for user in users:
+                user_info = personal_info.filter(user=user).first()
+                user_details_cache[user.id] = {
+                    'email': user.email,
+                    'full_name': user_info.full_name if user_info else None,
+                    'location': user_info.location if user_info else None,
+                    'job_title': user_info.job_title if user_info else None,
+                    # 'image': user_info.image if user_info else None
+                }
 
+            # Process invites and group by project_id
+            for invite in invitee_invites + inviter_invites:
+                proj_id = invite['project']
+                if proj_id not in project_data:
+                    project = ProjectDetails.objects.get(project_id=proj_id)
+                    project_data[proj_id] = {
+                        'project_id': project.project_id,
+                        'project_name': project.name,
+                        'project_status': project.status,
+                        'created_at': project.created_at,
+                        'invites': []
+                    }
+                user_id = invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']
+                user_details = user_details_cache.get(user_id)
+                project_data[proj_id]['invites'].append({
+                    'invite_id': invite['id'],
+                    'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
+                    'status': invite['status'],
+                    'updated_at': invite['updated_at'],
+                    'user_details': user_details
+                })
+
+            # Return the response with the project data
             response_data = list(project_data.values())
             return Response({
                 'status': 'success',
@@ -266,11 +259,11 @@ class GetInvitesView(APIView):
             }, status=status.HTTP_200_OK)
 
         except ProjectDetails.DoesNotExist:
-            return Response({'status':'false','message': 'Project does not exist or you do not have permission to view it','data':[]}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'status': 'false', 'message': 'Project does not exist or you do not have permission to view it', 'data': []}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Unexpected error occurred while {request.user.id} tried to get invites. Error: {e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
     queryset = ProjectRequirements.objects.all()
