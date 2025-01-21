@@ -2,6 +2,7 @@ from django.urls import path,include
 from rest_framework.routers import DefaultRouter
 from .views.views_v1 import *
 from .views.views_v2 import *
+from django.urls import path
 
 urlpatterns = [
     # Projects
@@ -31,7 +32,10 @@ urlpatterns += [
     path('v2/', include(router.urls)),
     path('v2/firstproject/', FirstProjectView.as_view(), name='firstproject'),
     path('v2/skiponboard/', SkipOnboardView.as_view(), name='skiponboard'),
+    path('v2/project_status/', ProjectStatusChangeView.as_view(), name='project-status'),
     path('v2/ai_suggestion/', SuggestionView.as_view(), name='suggestion'),
+    path('v2/taskstatus/', TaskStatusView.as_view(), name='get-suggestions'),
+    path('v2/get_suggestion/', GetSuggestionsView.as_view(), name='get-suggestions'),
     path('v2/invites/<uuid:invite_id>/respond/', RespondToInviteView.as_view(), name='respond_to_invite'),
     path('v2/get_invites/', GetInvitesView.as_view(), name='get_invites'),
 ]

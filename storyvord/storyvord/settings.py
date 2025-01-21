@@ -1,3 +1,4 @@
+import ssl
 import os
 from pathlib import Path
 import environ
@@ -68,7 +69,6 @@ INSTALLED_APPS = [
     'chat',
     'network',
     'creative_hub',
-
 
     'allauth',
     'allauth.account',
@@ -695,3 +695,28 @@ UNFOLD = {
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100 MB
+
+
+
+#TODO : Need to secure this settings
+REDIS_HOST = "StoryvordTasks.redis.cache.windows.net"
+REDIS_PORT = 6380  # TLS-enabled port for Azure Redis
+REDIS_KEY = os.getenv('REDIS_KEY')  # Ensure this is correctly set
+
+# Use "rediss://" for secure SSL connection (same as the working Redis connection)
+CELERY_BROKER_URL = f"rediss://:{REDIS_KEY}@{REDIS_HOST}:{REDIS_PORT}/0?ssl_cert_reqs=CERT_NONE"
+CELERY_RESULT_BACKEND = f"rediss://:{REDIS_KEY}@{REDIS_HOST}:{REDIS_PORT}/0?ssl_cert_reqs=CERT_NONE"
+
+# Celery serialization settings
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Add SSL transport options to Celery to match the SSL options in your working connection
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'ssl': {
+        'ssl_cert_reqs': 'CERT_NONE',  # Skip SSL verification for local testing
+    },
+    'socket_timeout': 30,  # Timeout to avoid connection resets
+}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = CELERY_BROKER_TRANSPORT_OPTIONS

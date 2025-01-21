@@ -24,7 +24,7 @@ client = AzureOpenAI(
     api_version="2024-08-01-preview",
 )
 
-def project_ai_suggestion(project,requirements,shooting_details):
+def project_ai_suggestion(project, requirements, shooting_details):
     
     class SuggestedData(BaseModel):
         compliance: List[str]
@@ -47,22 +47,32 @@ def project_ai_suggestion(project,requirements,shooting_details):
             
     try:
         completion = client.beta.chat.completions.parse(
-                    model="gpt-4o-2024-08-06",
-                    messages=[
-                        {"role": "system", "content": "I need you to act as a line producer with expertise in local locations, compliance issues, and cultural nuances. You have a strong understanding of the risks involved in film production, especially related to location-specific factors. You are also skilled in budgeting for films, including compliance costs, and creating detailed itineraries to ensure compliance. Your knowledge covers locations worldwide, from big cities to small towns in every country. Given this expertise, provide advice using critical thinking based on further details I will provide, such as crew size, equipment (like cameras), and the type of shoot (indoor, outdoor, corporate, or blog). Offer two options when appropriate. Your response should include a comprehensive overview, and feel free to ask questions to better understand my production needs. You need to provide me every single details possible for this project like compliance, logistic ,budget  and cuture. I need atleast 10000 words for each."},
-                        {"role": "user", "content": f"Provide me the suggestions for the project"
-                                                    f"Project description: {project.brief}."
-                                                    f"Project requirements: {requirements}."
-                                                    f"Shooting details: {shooting_details}."
-                                                    }
-                    ],
-                    response_format=ProjectSuggestionsResponse,
-                )
-
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": (
+                    "I need you to act as a line producer with expertise in local locations, compliance issues, "
+                    "and cultural nuances. You have a strong understanding of the risks involved in film production, "
+                    "especially related to location-specific factors. You are also skilled in budgeting for films, "
+                    "including compliance costs, and creating detailed itineraries to ensure compliance. Your knowledge "
+                    "covers locations worldwide, from big cities to small towns in every country. Given this expertise, "
+                    "provide advice using critical thinking based on further details I will provide, such as crew size, "
+                    "equipment (like cameras), and the type of shoot (indoor, outdoor, corporate, or blog). Offer two options "
+                    "when appropriate. Your response should include a comprehensive overview, and feel free to ask questions to "
+                    "better understand my production needs. You need to provide me every single details possible for this project "
+                    "like compliance, logistic, budget, and culture. I need at least 10000 words for each."
+                )},
+                {"role": "user", "content": (
+                    f"Provide me the suggestions for the project"
+                    f"Project description: {project.brief}."
+                    f"Project requirements: {requirements}."
+                    f"Shooting details: {shooting_details}."
+                )}
+            ],
+            response_format=ProjectSuggestionsResponse,
+        )
         structured_response = structured_crew_output(completion.choices[0].message.parsed)
         return structured_response
     except Exception as e:
-        print(f"Error : {e}")
         return {"message": "An error occurred while processing your request", "data": []}
  
 def structured_crew_output(parsed_response):
@@ -98,7 +108,7 @@ def generate_prompt(report_type, project_details, shooting_details):
         Shooting Details:
         {shooting_details}
 
-        Respond in markdown format with appropriate sections.
+        Provide the report in markdown format with appropriate sections.
         """,
         "compliance": f"""
         Based on the project details provided, outline the compliance requirements for the given location. Include necessary permits, local authority contacts, risk considerations, and recommendations for navigating local regulations.
@@ -118,7 +128,7 @@ def generate_prompt(report_type, project_details, shooting_details):
         Shooting Details:
         {shooting_details}
 
-        Respond in markdown format with clear sections.
+        Provide the report in markdown format with clear sections.
         """
     }
     return prompts.get(report_type, "Invalid report type.")
@@ -189,3 +199,4 @@ class EmailThread(Thread):
 
     def run(self):
         self.email.send()
+

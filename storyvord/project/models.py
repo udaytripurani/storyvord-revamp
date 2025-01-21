@@ -242,6 +242,7 @@ class ShootingDetails(models.Model):
 class ProjectAISuggestions(models.Model):
     project = models.ForeignKey(ProjectDetails, on_delete=models.CASCADE)
     shoot = models.ForeignKey(ShootingDetails, on_delete=models.CASCADE, null=True, blank=True)
+    suggested_crew = models.TextField(null=True, blank=True)
     suggested_budget =  models.TextField(null=True, blank=True)
     suggested_compliance = models.TextField(null=True, blank=True)
     suggested_culture = models.TextField(null=True, blank=True)
