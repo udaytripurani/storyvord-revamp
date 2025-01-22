@@ -727,10 +727,24 @@ class SuggestionView(APIView):
         try:
             project_id = request.query_params.get('project_id')
             regenerate = request.query_params.get('regenerate')
-            print(project_id, regenerate)
 
             if not project_id:
                 return Response({'error': 'project_id is required.'}, status=400)
+
+            if regenerate is None:
+                # Fetch the project suggestion from the database
+                project_suggestion = get_object_or_404(ProjectAISuggestions, project_id=project_id)
+                return Response({
+                    'success': True,
+                    'message': 'Project suggestion fetched successfully.',
+                    'data': {
+                        'suggested_logistics': project_suggestion.suggested_logistics,
+                        'suggested_budget': project_suggestion.suggested_budget,
+                        'suggested_compliance': project_suggestion.suggested_compliance,
+                        'suggested_culture': project_suggestion.suggested_culture,
+                        'suggested_crew': project_suggestion.suggested_crew
+                    }
+                }, status=200)
 
             # Enqueue the task
             task = process_suggestions_and_reports.delay(project_id, regenerate)
