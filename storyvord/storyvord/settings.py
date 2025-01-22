@@ -582,6 +582,9 @@ def badge_callback(request):
 def permission_callback(request):
     return request.user.has_perm("sample_app.change_model")
 
+# Public Unfold assets
+UNFOLD_STATIC_URL = "https://storyvorddevblob.blob.core.windows.net/unfold-static/"
+
 UNFOLD = {
     "SITE_TITLE": "Storyvord",
     "SITE_HEADER": "Storyvord",

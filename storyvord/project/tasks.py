@@ -1,10 +1,11 @@
 from celery import shared_task
 from .models import ProjectAISuggestions, ProjectDetails, ProjectRequirements, ShootingDetails
 from .utils import project_ai_suggestion, generate_report
+import time
+import requests
 
-
-@shared_task
-def process_suggestions_and_reports(project_id, regenerate=None):
+@shared_task(bind=True, max_retries=5)
+def process_suggestions_and_reports(self,project_id, regenerate=None):
     try:
         # Fetch the project and related data
         project = ProjectDetails.objects.get(project_id=project_id)
@@ -26,7 +27,7 @@ def process_suggestions_and_reports(project_id, regenerate=None):
             reports["culture"] = generate_report("culture", project_details, shooting_details)
             
         # Update AI suggestions in the database
-        ProjectAISuggestions.objects.update_or_create(
+        ai_suggestion, created = ProjectAISuggestions.objects.update_or_create(
             project=project,
             defaults={
                 'suggested_logistics': reports.get("logistics", ""),
@@ -39,7 +40,22 @@ def process_suggestions_and_reports(project_id, regenerate=None):
 
         return {
             'success': True,
-            'reports': reports
+            'reports': reports,
+            'ai_suggestion': ai_suggestion.id 
         }
+    except requests.exceptions.RequestException as exc:
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        raise self.retry(exc=e, countdown=2 ** self.request.retries)
+
+def call_with_retry(func, *args, **kwargs):
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except requests.exceptions.RequestException as e:
+            if e.response.status_code == 429:  # Too Many Requests
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                raise
+    raise Exception("Max retries exceeded")
