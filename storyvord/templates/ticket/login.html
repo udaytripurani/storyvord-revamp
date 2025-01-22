@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 400px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        label {
+            font-weight: bold;
+        }
+        input {
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success-message {
+            color: green;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .svg-icon {
+            position: absolute;
+            top: -18px;
+            left: 25px;
+            width: 150px;
+            height: 150px;
+        }
+    </style>
+</head>
+<body>
+    <!-- SVG Icon -->
+    <img class="svg-icon" src="/static/StoryvordLogo.svg" alt="Icon">
+
+    <div class="container">
+        <div class="header">
+            <h2>Login</h2>
+            <select id="login-type-selector">
+                <option value="admin">Admin</option>
+                <option value="agent">Agent</option>
+            </select>
+        </div>
+        <!-- Login Form -->
+        <form id="login-form">
+            <label for="email">Email</label>
+            <input type="text" id="email" name="email" required>
+            
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+            
+            <button type="submit">Login</button>
+            <p class="success-message" id="success-message"></p>
+            <p class="error-message" id="error-message"></p>
+        </form>
+    </div>
+
+    <script>
+        const loginTypeSelector = document.getElementById('login-type-selector');
+        const loginForm = document.getElementById('login-form');
+        const successMessage = document.getElementById('success-message');
+        const errorMessage = document.getElementById('error-message');
+
+        // Default values
+        let loginType = 'admin';
+        let loginUrl = 'http://127.0.0.1:8000/api/accounts/v2/login/';
+        let tokenKey = 'admin_access_token';
+        let dashboardUrl = 'http://127.0.0.1:8000/api/tickets/admin/';
+
+        // Update login type based on selector
+        loginTypeSelector.addEventListener('change', (event) => {
+            loginType = event.target.value;
+            if (loginType === 'admin') {
+                loginUrl = 'http://127.0.0.1:8000/api/accounts/v2/login/';
+                tokenKey = 'admin_access_token';
+                dashboardUrl = 'http://127.0.0.1:8000/api/tickets/admin/';
+            } else {
+                loginUrl = 'http://127.0.0.1:8000/api/agent/login/';
+                tokenKey = 'agent_access_token';
+                dashboardUrl = 'http://127.0.0.1:8000/api/agent/dashboard/';
+            }
+        });
+
+        // Handle Login Form Submission
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            errorMessage.textContent = '';
+            successMessage.textContent = '';
+
+            const payload = { email, password };
+
+            try {
+                const response = await fetch(loginUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const accessToken = loginType === 'admin' ? data.data.tokens.access : data.access;
+                    localStorage.setItem(tokenKey, accessToken);
+                    window.location.href = dashboardUrl;
+                } else {
+                    throw new Error(data.message || 'Login failed.');
+                }
+            } catch (error) {
+                errorMessage.textContent = error.message;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>

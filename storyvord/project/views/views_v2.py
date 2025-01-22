@@ -1,3 +1,4 @@
+from multiprocessing.pool import AsyncResult
 from django.forms import model_to_dict
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
@@ -13,7 +14,7 @@ from client.models import ClientProfile
 from crew.models import CrewProfile
 from ..models import (
     ProjectDetails, ProjectRequirements, ShootingDetails, ProjectInvite,
-    Role, Membership, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,ProjectAISuggestions
+    Role, Membership, StatusChoices, User, Permission,ProjectCrewRequirement, ProjectEquipmentRequirement,ProjectAISuggestions
 )
 from decimal import Decimal , InvalidOperation
 from ..serializers.serializers_v2 import (
@@ -23,6 +24,9 @@ from ..serializers.serializers_v2 import (
 import uuid
 from django.http import JsonResponse
 from project.utils import generate_report, project_ai_suggestion, send_invitation_email
+
+from django.http import JsonResponse
+from ..tasks import process_suggestions_and_reports
 
 import logging
 logger = logging.getLogger(__name__)
@@ -187,77 +191,71 @@ class RespondToInviteView(APIView):
 class GetInvitesView(APIView):
     permission_classes = [IsAuthenticated]
 
+    #TODO Not getting filtered invite by project id, instead getting all invites + crew profile as well if it exists
     def get(self, request):
         try:
-            # Fetch invites for the authenticated user
+            # Get project_id from query params
+            project_id = request.query_params.get('project_id')
+
+            # Start by fetching the invites for the authenticated user
             invites = ProjectInvite.objects.filter(
                 Q(inviter=request.user) | Q(invitee=request.user)
             )
 
-            # Serialize the invites
+            # If project_id is passed, filter invites by project
+            if project_id:
+                invites = invites.filter(project_id=project_id)
+
+            # Serialize the filtered invites
             serializer = ProjectInviteSerializer(invites, many=True)
+
+            # Separate invites into invitee and inviter categories
             invitee_invites = [invite for invite in serializer.data if invite['invitee'] == request.user.id]
             inviter_invites = [invite for invite in serializer.data if invite['inviter'] == request.user.id]
 
-            project_id = request.query_params.get('project_id')
             project_data = {}
 
-            # If project_id is passed, filter the invites by project
-            if project_id:
-                for invite in invitee_invites + inviter_invites:
-                    proj_id = project_id
-                    if proj_id not in project_data:
-                        project = ProjectDetails.objects.get(Q(project_id=proj_id) & Q(owner=request.user))
-                        project_data[proj_id] = {
-                            'project_id': project.project_id,
-                            'project_name': project.name,
-                            'project_status': project.status,
-                            'created_at': project.created_at,
-                            'invites': []
-                        }
-                    project_data[proj_id]['invites'].append({
-                        'invite_id': invite['id'],
-                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
-                        'status': invite['status'],
-                        'updated_at': invite['updated_at'],
-                         'user_details':{
-                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
-                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
-                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
-                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
-                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
-                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
-                        }
-                    })
+            # Cache user details to avoid redundant queries
+            user_details_cache = {}
+            user_ids = set(invite['inviter'] for invite in invitee_invites + inviter_invites) | \
+                        set(invite['invitee'] for invite in invitee_invites + inviter_invites)
+            
+            users = User.objects.filter(id__in=user_ids)
+            personal_info = PersonalInfo.objects.filter(user__in=users)
 
-            # If project_id is not passed, return all invites
-            else:
-                for invite in invitee_invites + inviter_invites:
-                    proj_id = invite['project']
-                    if proj_id not in project_data:
-                        project = ProjectDetails.objects.get(project_id=proj_id)
-                        project_data[proj_id] = {
-                            'project_id': project.project_id,
-                            'project_name': project.name,
-                            'project_status': project.status,
-                            'created_at': project.created_at,
-                            'invites': []
-                        }
-                    project_data[proj_id]['invites'].append({
-                        'invite_id': invite['id'],
-                        'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
-                        'status': invite['status'],
-                        'updated_at': invite['updated_at'],
-                        'user_details':{
-                            'user_id': invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee'],
-                            'email': User.objects.get(id=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).email,
-                            'full_name': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('full_name', flat=True).first(),
-                            'location': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('location', flat=True).first(),
-                            'job_title': PersonalInfo.objects.filter(user=invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']).values_list('job_title', flat=True).first()
-                            # 'image': PersonalInfo.objects.get(user_id=invite['invitee'] if invite['invitee'] == request.user.id else invite['inviter']).image
-                        }
-                    })
+            for user in users:
+                user_info = personal_info.filter(user=user).first()
+                user_details_cache[user.id] = {
+                    'email': user.email,
+                    'full_name': user_info.full_name if user_info else None,
+                    'location': user_info.location if user_info else None,
+                    'job_title': user_info.job_title if user_info else None,
+                    # 'image': user_info.image if user_info else None
+                }
 
+            # Process invites and group by project_id
+            for invite in invitee_invites + inviter_invites:
+                proj_id = invite['project']
+                if proj_id not in project_data:
+                    project = ProjectDetails.objects.get(project_id=proj_id)
+                    project_data[proj_id] = {
+                        'project_id': project.project_id,
+                        'project_name': project.name,
+                        'project_status': project.status,
+                        'created_at': project.created_at,
+                        'invites': []
+                    }
+                user_id = invite['inviter'] if invite['invitee'] == request.user.id else invite['invitee']
+                user_details = user_details_cache.get(user_id)
+                project_data[proj_id]['invites'].append({
+                    'invite_id': invite['id'],
+                    'invitee_or_inviter': 'invitee' if invite['invitee'] == request.user.id else 'inviter',
+                    'status': invite['status'],
+                    'updated_at': invite['updated_at'],
+                    'user_details': user_details
+                })
+
+            # Return the response with the project data
             response_data = list(project_data.values())
             return Response({
                 'status': 'success',
@@ -266,11 +264,11 @@ class GetInvitesView(APIView):
             }, status=status.HTTP_200_OK)
 
         except ProjectDetails.DoesNotExist:
-            return Response({'status':'false','message': 'Project does not exist or you do not have permission to view it','data':[]}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'status': 'false', 'message': 'Project does not exist or you do not have permission to view it', 'data': []}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Unexpected error occurred while {request.user.id} tried to get invites. Error: {e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+
 # Project Requirements Viewset
 class ProjectRequirementsViewSet(viewsets.ModelViewSet):
     queryset = ProjectRequirements.objects.all()
@@ -721,100 +719,96 @@ class SkipOnboardView(APIView):
             return Response({'message': 'First project skipped successfully'}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+        
 class SuggestionView(APIView):
     permission_classes = [IsAuthenticated]
-
-    def get_project(self, project_id, user):
-        """
-        Retrieve the project and validate user access.
-        """
-        project = get_object_or_404(ProjectDetails, project_id=project_id)
-
-        if project.owner != user and not Membership.objects.filter(project=project, user=user).exists():
-            raise PermissionDenied("You do not have permission to view AI suggestions for this project.")
-
-        return project
-
-    def regenerate_report(self, project, project_details, shooting_details, regenerate=None):
-        """
-        Generate or regenerate specific reports based on the regenerate parameter.
-        """
-        reports = {}
-        if not regenerate or "logistics" in regenerate:
-            reports["logistics"] = generate_report("logistics", project_details, shooting_details)
-        if not regenerate or "budget" in regenerate:
-            reports["budget"] = generate_report("budget", project_details, shooting_details)
-        if not regenerate or "compliance" in regenerate:
-            reports["compliance"] = generate_report("compliance", project_details, shooting_details)
-        if not regenerate or "culture" in regenerate:
-            reports["culture"] = generate_report("culture", project_details, shooting_details)
-
-        # Update or create AI suggestions in the database
-        ProjectAISuggestions.objects.update_or_create(
-            project=project,
-            defaults={
-                'suggested_logistics': reports.get("logistics", ""),
-                'suggested_budget': reports.get("budget", ""),
-                'suggested_compliance': reports.get("compliance", ""),
-                'suggested_culture': reports.get("culture", "")
-            }
-        )
-        return reports
 
     def get(self, request):
         try:
             project_id = request.query_params.get('project_id')
-            regenerate = request.query_params.getlist('regenerate')
+            regenerate = request.query_params.get('regenerate')
+            print(project_id, regenerate)
 
             if not project_id:
                 return Response({'error': 'project_id is required.'}, status=400)
 
-            project = self.get_project(project_id, request.user)
-
-            # Fetch related data
-            requirements = ProjectRequirements.objects.get(project=project)
-            shooting_details = ShootingDetails.objects.filter(project=project).values()
-            project_details = project.brief
-
-            # Fetch cached suggestions if no regeneration is requested
-            if not regenerate:
-                cached_suggestions = ProjectAISuggestions.objects.filter(project=project).first()
-                if cached_suggestions:
-                    serialized_suggestions = {
-                        'logistics': cached_suggestions.suggested_logistics,
-                        'budget': cached_suggestions.suggested_budget,
-                        'compliance': cached_suggestions.suggested_compliance,
-                        'culture': cached_suggestions.suggested_culture,
-                    }
-                    return Response({
-                        'success': True,
-                        'message': 'Cached data retrieved.',
-                        'data': {
-                            'project_id': project_id,
-                            'suggestion': "Suggestions already available in the database.",
-                            'report': serialized_suggestions
-                        }
-                    }, status=200)
-
-            # Generate AI suggestion
-            ai_suggestion = project_ai_suggestion(project, requirements, shooting_details)
-
-            # Regenerate specific reports or all reports
-            reports = self.regenerate_report(project, project_details, shooting_details, regenerate)
+            # Enqueue the task
+            task = process_suggestions_and_reports.delay(project_id, regenerate)
 
             return Response({
                 'success': True,
-                'message': 'Data generated successfully.',
-                'data': {
-                    'project_id': project_id,
-                    'suggestion': ai_suggestion,
-                    'report': reports
-                }
-            }, status=200)
+                'message': 'The process has started. Results will be available soon.',
+                'task_id': task.id
+            }, status=202)
 
-        except ProjectRequirements.DoesNotExist:
-            return Response({'error': 'Project requirements not found.'}, status=404)
         except Exception as e:
             logger.error(f"Error in SuggestionView: {str(e)}")
+            return Response({'error': str(e)}, status=500)
+        
+class TaskStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            task_id = request.query_params.get('task_id')
+            if not task_id:
+                return Response({'error': 'task_id is required.'}, status=400)
+
+            # Get Celery task result
+            task = AsyncResult(task_id)
+            if task.status == 'SUCCESS':
+                result = task.result
+                return Response(result, status=200)
+            elif task.status == 'FAILURE':
+                return Response({'error': str(task.result)}, status=500)
+            else:
+                return Response({'status': task.status.lower()}, status=202)  # 'PENDING', etc.
+        except Exception as e:
+            logger.error(f"Error in GetSuggestionView: {str(e)}")
+            return Response({'error': str(e)}, status=500)
+        
+class GetSuggestionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            project_id = request.query_params.get('project_id')
+            if not project_id:
+                return Response({'error': 'project_id is required.'}, status=400)
+
+            suggestions = ProjectAISuggestions.objects.filter(project_id=project_id).values()
+            return Response(suggestions, status=200)
+        except Exception as e:
+            logger.error(f"Error in GetSuggestionsView: {str(e)}")
+            return Response({'error': str(e)}, status=500)
+
+class ProjectStatusChangeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            project_id = request.query_params.get('project_id')
+            if not project_id:
+                return Response({'error': 'project_id is required.'}, status=400)
+            
+            project = ProjectDetails.objects.filter(project_id=project_id).get()
+            membership = Membership.objects.filter(user=user, project_id=project_id).get()
+            
+            if project.owner != user or membership.role.name != 'admin':
+                print(project.owner, user, membership.role)
+                return Response({'error': 'You are not the owner of this project.'}, status=403)
+            
+            project = ProjectDetails.objects.get(project_id=project_id)
+            
+            status = request.data.get('status')
+            if status in StatusChoices.values:
+                project.status = status
+                project.save()
+            else:
+                return Response({'error': 'Invalid status provided.'}, status=400)
+            
+            return Response({'message': 'Project status updated successfully.'}, status=200)
+        except Exception as e:
+            logger.error(f"Error in GetSuggestionsView: {str(e)}")
             return Response({'error': str(e)}, status=500)

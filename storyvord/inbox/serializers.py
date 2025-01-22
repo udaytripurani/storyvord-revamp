@@ -5,16 +5,21 @@ from .models import DialogsModel, MessageModel, RoomModel
 
 class UserProfileSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'user_type', 'name']
+        fields = ['id', 'email', 'user_type', 'name', 'image']
 
     def get_name(self, obj):
         profile = getattr(obj, 'clientprofile', None) or getattr(obj, 'crewprofile', None)
         personal_info = getattr(obj, 'personalinfo', None)
         name = personal_info.full_name if personal_info else None
-        return name if personal_info else profile.email
+        return name if personal_info else profile
+    
+    def get_image(self, obj):
+        personal_info = getattr(obj, 'personalinfo', None)
+        return personal_info.image if personal_info and personal_info.image else None
 
 class DialogSerializer(serializers.ModelSerializer):
     user1 = UserProfileSerializer(read_only=True)

@@ -20,7 +20,7 @@ class Script(models.Model):
 
 class Scene(models.Model):
     script = models.ForeignKey(Script, on_delete=models.CASCADE, related_name="scenes", null=True, blank=True)
-    scene_name = models.CharField(max_length=255)
+    scene_name = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField()  # Scene summary
     location = models.CharField(max_length=255, blank=True, null=True)
     order = models.PositiveIntegerField()  # Order of the scene in the script
