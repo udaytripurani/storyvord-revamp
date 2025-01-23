@@ -792,42 +792,73 @@ from django.db.models import Q
 from .models import CrewProfile
 from accounts.models import PersonalInfo
 from .serializers import CrewProfileSerializer
-
+from project.models import ProjectInvite
 class CrewProfileSearchView(APIView):
     """
-    API view to search crew profiles based on location, skills, and name.
+    API view to search crew profiles with invitation status from logged-in user
     """
+    permission_classes =[permissions.IsAuthenticated]
 
     def post(self, request, format=None):
         try:
-            # Extract data from request body
+            # Extract search parameters
             location_query = request.data.get('location', '')
             skills_query = request.data.get('skills', '')
             name_query = request.data.get('name', '')
 
-            # Perform search operations
-            personal_info_ids = PersonalInfo.objects.filter(
-                Q(full_name__icontains=name_query)
-            ).values_list('id', flat=True)
-
+            # Get base crew profiles
             crew_profiles = CrewProfile.objects.filter(
-                Q(personal_info_id__in=personal_info_ids) &
+                Q(personal_info__full_name__icontains=name_query) &
                 Q(personal_info__location__icontains=location_query) &
                 Q(skills__icontains=skills_query),
                 active=True
+            ).select_related('personal_info__user')
+
+            # Get all crew user IDs
+            crew_user_ids = [cp.personal_info.user.id for cp in crew_profiles]
+
+            # Get all invites sent by current user to these crew members
+            invites = ProjectInvite.objects.filter(
+                inviter=request.user,
+                invitee_id__in=crew_user_ids
             )
+
+            # Create invitation map {crew_user_id: {project_id: invite_data}}
+            invitation_map = defaultdict(dict)
+            for invite in invites:
+                invitation_map[invite.invitee_id][invite.project_id] = {
+                    "status": invite.status,
+                    "updated_at": invite.updated_at
+                    
+                }
 
             # Serialize results
             serializer = CrewProfileSerializer(crew_profiles, many=True)
-            response_data = {
-                'message': 'Success',
-                'data': serializer.data
-            }
+            response_data = []
+            
+            # Add invitation status to each crew profile
+            for profile, data in zip(crew_profiles, serializer.data):
+                user_id = profile.personal_info.user.id
+                invitations = []
+                
+                # Get all projects for this crew member
+                for project_id, invite_data in invitation_map.get(user_id, {}).items():
+                    invitations.append({
+                        "project_id": project_id,
+                        "status": invite_data['status'],
+                        "last_updated": invite_data['updated_at']
+                        
+                    })
+                
+                data['invitations'] = sorted(invitations, key=lambda x: x['last_updated'], reverse=True)
+                response_data.append(data)
 
-            # Return success response
-            return Response(response_data, status=status.HTTP_200_OK)
+            return Response({
+                'message': 'Success',
+                'data': response_data
+            }, status=status.HTTP_200_OK)
+
         except Exception as exc:
-            # Return error response
             return Response(
                 {'message': 'An error occurred', 'details': str(exc)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
