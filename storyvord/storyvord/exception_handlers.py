@@ -15,8 +15,17 @@ ValidationError,
 AuthenticationFailed,
 )
 import requests.exceptions
+from rest_framework.exceptions import NotAuthenticated
 
 def custom_exception_handler(exc, context):
+    
+    if isinstance(exc, NotAuthenticated):
+        custom_response = {
+            "status": False,
+            "code": status.HTTP_401_UNAUTHORIZED,
+            "message": "Authentication credentials were not provided."
+        }
+        return Response(custom_response, status=status.HTTP_401_UNAUTHORIZED)
     if isinstance(exc, ObjectDoesNotExist):
         custom_response = {
             "status": False,

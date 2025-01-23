@@ -48,12 +48,28 @@ class UserType(models.Model):
     def __str__(self):
         return self.name
     
+class Tier(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    name = models.CharField(max_length=50)
+    description = models.TextField(blank=True, null=True)
+    user_type = models.ForeignKey(UserType, on_delete=models.CASCADE, related_name='tiers')
+    permissions = models.ManyToManyField(Permission, related_name='tiers', blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    is_default = models.BooleanField(default=False)  # Default free tier
+    
+    class Meta:
+        unique_together = ('name', 'user_type')
+
+    def __str__(self):
+        return f"{self.user_type.name} - {self.name}"
+    
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(max_length=255,unique=True, db_index=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     user_type = models.ForeignKey(UserType, on_delete=models.SET_NULL, null=True, blank=True)
     user_stage = models.CharField(max_length=10, blank=True, null=True)
+    tier = models.ForeignKey(Tier, on_delete=models.SET_NULL, null=True, blank=True)
     verified = models.BooleanField(default=False)
     steps = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -61,11 +77,20 @@ class User(AbstractBaseUser, PermissionsMixin):
     auth_provider = models.CharField(
         max_length=255, blank=False,
         null=False, default=AUTH_PROVIDERS.get('email'))
-
+    
     objects = UserManager() 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
     
+    def assign_default_tier(self):
+        """Assign the default tier for the selected user type"""
+        default_tier = Tier.objects.filter(user_type=self.user_type, is_default=True).first()
+        self.tier = default_tier
+        self.save()
+    
+    def __str__(self):
+        return self.email
+
 class PersonalInfo(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=256, null=True, blank=True)
