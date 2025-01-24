@@ -152,6 +152,10 @@ class ProjectDetails(models.Model):
     brief = models.TextField() #TODO Word Limit
     additional_details = models.TextField() #TODO Word Limit
     status = models.CharField(max_length=30, choices=StatusChoices.choices, default=StatusChoices.PLANNING)
+    ai_context = models.JSONField(
+        default=dict,
+        help_text="Stores shared AI-generated context across reports"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -247,6 +251,19 @@ class ProjectAISuggestions(models.Model):
     suggested_compliance = models.TextField(null=True, blank=True)
     suggested_culture = models.TextField(null=True, blank=True)
     suggested_logistics = models.TextField(null=True, blank=True)
+    sustainability_report = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
+        help_text="Structured sustainability data in JSON format"
+    )
+    recommended_suppliers = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
+        help_text="Structured supplier recommendations by location"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
