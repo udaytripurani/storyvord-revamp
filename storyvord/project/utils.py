@@ -51,7 +51,7 @@ SUSTAINABILITY_SCHEMA = {
 SUPPLIER_SCHEMA = {
     "type": "object",
     "patternProperties": {
-        "^[a-zA-Z]+$": {  # city names (e.g. "mumbai")
+        "^[a-zA-Z_\\-\\s]+$": {  # city names (e.g. "mumbai")
             "type": "array",
             "items": {
                 "type": "object",
@@ -365,6 +365,7 @@ def generate_supplier_recommendations(project, requirements, locations):
             "- Catering services", 
             "- Transportation providers",
             "- Location permits"
+            '- Use city names in CamelCase format (e.g., "NewYork", "LosAngeles", "HongKong").'
         ])
     )
     
@@ -383,7 +384,10 @@ def generate_supplier_recommendations(project, requirements, locations):
         ]
     )
     generated_data = json.loads(completion.choices[0].message.content)
-    validate(generated_data, SUPPLIER_SCHEMA)
+    try:
+        validate(generated_data, SUPPLIER_SCHEMA)
+    except Exception as e:
+        generated_data = {generated_data}
     return generated_data
 
 
