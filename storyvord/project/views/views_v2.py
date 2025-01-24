@@ -742,7 +742,9 @@ class SuggestionView(APIView):
                         'suggested_budget': project_suggestion.suggested_budget,
                         'suggested_compliance': project_suggestion.suggested_compliance,
                         'suggested_culture': project_suggestion.suggested_culture,
-                        'suggested_crew': project_suggestion.suggested_crew
+                        'suggested_crew': project_suggestion.suggested_crew,
+                        'sustainability_report': project_suggestion.sustainability_report,
+                        'recommended_suppliers': project_suggestion.recommended_suppliers
                     }
                 }, status=200)
 
